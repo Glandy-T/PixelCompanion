@@ -8,6 +8,7 @@ const { IdleSensor } = require('./sensors/idle-sensor');
 const { SensorManager } = require('./sensors/sensor-manager');
 const { BridgeManager, BRIDGE_STATE_UPDATED } = require('./bridges/bridge-manager');
 const { BridgeBehaviorIntegration } = require('./bridges/bridge-behavior-integration');
+const { ECOLOGY_LOCAL_BUBBLE, ECOLOGY_STATE_UPDATED, EcologyEngine } = require('./ecology/ecology-engine');
 
 let petWindow;
 let debugWindow;
@@ -18,6 +19,7 @@ let environmentEventBus = null;
 let sensorManager = null;
 let bridgeManager = null;
 let bridgeBehaviorIntegration = null;
+let ecologyEngine = null;
 let latestAnimationSnapshot = null;
 
 function getPetWindow(webContents) {
@@ -89,6 +91,7 @@ function sendDebugSnapshot() {
   sendToDebugWindow('environment:state-changed', sensorManager?.getSnapshot() ?? null);
   sendToDebugWindow('animation:state-changed', latestAnimationSnapshot);
   sendToDebugWindow('bridge:state-changed', bridgeManager?.getSnapshot() ?? null);
+  sendToDebugWindow('ecology:state-changed', ecologyEngine?.getSnapshot() ?? null);
 }
 
 function createDebugWindow() {
@@ -103,7 +106,7 @@ function createDebugWindow() {
 
   debugWindow = new BrowserWindow({
     width: 500,
-    height: 720,
+    height: 860,
     minWidth: 400,
     minHeight: 440,
     title: 'Pixel Companion Debug',
@@ -185,6 +188,20 @@ function createBridgeRuntime(eventBus, engine) {
   return { manager, behaviorIntegration };
 }
 
+function createEcologyRuntime(eventBus) {
+  const engine = new EcologyEngine({ eventBus });
+  eventBus.on(ECOLOGY_STATE_UPDATED, (event) => {
+    sendToDebugWindow('ecology:state-changed', event.payload);
+  });
+  eventBus.on(ECOLOGY_LOCAL_BUBBLE, (event) => {
+    if (petWindow && !petWindow.isDestroyed()) {
+      petWindow.webContents.send('ecology:local-bubble', event.payload.message);
+    }
+  });
+  engine.start();
+  return engine;
+}
+
 function createWindow() {
   const window = new BrowserWindow({
     width: 256,
@@ -210,6 +227,7 @@ function createWindow() {
   const bridgeRuntime = createBridgeRuntime(environmentEventBus, behaviorEngine);
   bridgeManager = bridgeRuntime.manager;
   bridgeBehaviorIntegration = bridgeRuntime.behaviorIntegration;
+  ecologyEngine = createEcologyRuntime(environmentEventBus);
   window.setMenuBarVisibility(false);
   window.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   window.once('ready-to-show', () => {
@@ -228,6 +246,8 @@ function createWindow() {
       bridgeManager = null;
       bridgeBehaviorIntegration?.stop();
       bridgeBehaviorIntegration = null;
+      ecologyEngine?.stop();
+      ecologyEngine = null;
       behaviorEngine?.stop();
       behaviorEngine = null;
       environmentEventBus = null;
@@ -303,6 +323,7 @@ ipcMain.handle('app:get-runtime-config', () => ({
 ipcMain.handle('behavior:get-state', () => behaviorEngine?.getSnapshot() ?? null);
 ipcMain.handle('environment:get-state', () => sensorManager?.getSnapshot() ?? null);
 ipcMain.handle('bridge:get-state', () => bridgeManager?.getSnapshot() ?? null);
+ipcMain.handle('ecology:get-state', () => ecologyEngine?.getSnapshot() ?? null);
 
 ipcMain.handle('bridge:set-sqlite-enabled', (event, enabled) => {
   if (app.isPackaged || event.sender !== debugWindow?.webContents || !bridgeManager) {
@@ -310,6 +331,20 @@ ipcMain.handle('bridge:set-sqlite-enabled', (event, enabled) => {
   }
 
   return bridgeManager.setSqliteObservationEnabled(Boolean(enabled));
+});
+
+ipcMain.on('ecology:interaction', (event, kind) => {
+  if (getPetWindow(event.sender) === petWindow && typeof kind === 'string') {
+    ecologyEngine?.recordInteraction(kind);
+  }
+});
+
+ipcMain.handle('ecology:debug-action', (event, action) => {
+  if (app.isPackaged || event.sender !== debugWindow?.webContents || typeof action !== 'string') {
+    return ecologyEngine?.getSnapshot() ?? null;
+  }
+
+  return ecologyEngine?.debugAction(action) ?? null;
 });
 
 ipcMain.on('behavior:debug-request', (event, state) => {

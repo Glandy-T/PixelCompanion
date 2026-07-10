@@ -27,6 +27,20 @@ const bridgeLastEvent = document.querySelector('#bridge-last-event');
 const bridgePollingHealth = document.querySelector('#bridge-polling-health');
 const bridgeLastError = document.querySelector('#bridge-last-error');
 const bridgeLiveValidation = document.querySelector('#bridge-live-validation');
+const ecologyEnergy = document.querySelector('#ecology-energy');
+const ecologyCuriosity = document.querySelector('#ecology-curiosity');
+const ecologyAttention = document.querySelector('#ecology-attention');
+const ecologySocialDrive = document.querySelector('#ecology-social-drive');
+const ecologyFocus = document.querySelector('#ecology-focus');
+const ecologyArousal = document.querySelector('#ecology-arousal');
+const ecologyTimePeriod = document.querySelector('#ecology-time-period');
+const ecologyTickHealth = document.querySelector('#ecology-tick-health');
+const ecologyLastEvent = document.querySelector('#ecology-last-event');
+const ecologyLastDecision = document.querySelector('#ecology-last-decision');
+const ecologyCooldown = document.querySelector('#ecology-cooldown');
+const ecologyMemoryCount = document.querySelector('#ecology-memory-count');
+const ecologyObserveOpportunity = document.querySelector('#ecology-observe-opportunity');
+const ecologyRandom = document.querySelector('#ecology-random');
 
 function formatSeconds(milliseconds) {
   return `${Math.floor(Math.max(0, milliseconds) / 1000)}s`;
@@ -102,6 +116,42 @@ function applyBridgeState(snapshot) {
     : 'not observed';
 }
 
+function formatDrive(value) {
+  return Number.isFinite(value) ? value.toFixed(2) : '0.00';
+}
+
+function applyEcologyState(snapshot) {
+  if (!snapshot) {
+    return;
+  }
+
+  const drives = snapshot.drives ?? {};
+  ecologyEnergy.textContent = formatDrive(drives.energy);
+  ecologyCuriosity.textContent = formatDrive(drives.curiosity);
+  ecologyAttention.textContent = formatDrive(drives.attention);
+  ecologySocialDrive.textContent = formatDrive(drives.socialDrive);
+  ecologyFocus.textContent = formatDrive(drives.focus);
+  ecologyArousal.textContent = formatDrive(drives.arousal);
+  ecologyTimePeriod.textContent = snapshot.timePeriod ?? 'unknown';
+  ecologyTickHealth.textContent = snapshot.paused ? 'paused' : (snapshot.tick?.healthy ? 'healthy' : 'unknown');
+  ecologyLastEvent.textContent = snapshot.lastEcologyEvent?.name ?? 'none';
+  ecologyLastDecision.textContent = snapshot.lastProactiveDecision
+    ? `${snapshot.lastProactiveDecision.type}: ${snapshot.lastProactiveDecision.reason}`
+    : 'none';
+  ecologyCooldown.textContent = `${Math.round((snapshot.proactiveCooldownMs ?? 0) / 1000)}s`;
+  const memory = snapshot.memory ?? {};
+  ecologyMemoryCount.textContent = String(
+    (memory.recentAppCategoryCount ?? 0) +
+    (memory.recentAppSwitchCount ?? 0) +
+    (memory.recentUserInteractionCount ?? 0) +
+    (memory.recentBehaviorStateCount ?? 0) +
+    (memory.recentProactiveActionCount ?? 0) +
+    (memory.recentLocalDialogueCount ?? 0)
+  );
+  ecologyObserveOpportunity.textContent = snapshot.lastObserveOpportunity ? 'recorded' : 'none';
+  ecologyRandom.textContent = `${snapshot.random?.mode ?? 'unknown'} / ${snapshot.random?.seed ?? 'n/a'}`;
+}
+
 document.querySelector('.debug-actions').addEventListener('click', (event) => {
   const button = event.target.closest('[data-behavior]');
   if (button) {
@@ -114,10 +164,19 @@ bridgeSqliteEnabled.addEventListener('change', async () => {
   applyBridgeState(snapshot);
 });
 
+document.querySelector('.ecology-actions').addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-ecology-action]');
+  if (button) {
+    applyEcologyState(await window.debug.ecologyDebugAction(button.dataset.ecologyAction));
+  }
+});
+
 window.debug.onBehaviorState(applyBehaviorState);
 window.debug.onEnvironmentState(applyEnvironmentState);
 window.debug.onAnimationState(applyAnimationState);
 window.debug.onBridgeState(applyBridgeState);
+window.debug.onEcologyState(applyEcologyState);
 window.debug.getBehaviorState().then(applyBehaviorState);
 window.debug.getEnvironmentState().then(applyEnvironmentState);
 window.debug.getBridgeState().then(applyBridgeState);
+window.debug.getEcologyState().then(applyEcologyState);

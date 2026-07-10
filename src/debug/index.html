@@ -61,6 +61,35 @@
           <dt>SQLite live result</dt><dd id="bridge-live-validation">not observed</dd>
         </dl>
       </section>
+      <section aria-labelledby="ecology-title">
+        <h2 id="ecology-title">Local Ecology</h2>
+        <dl>
+          <dt>Energy</dt><dd id="ecology-energy">0.00</dd>
+          <dt>Curiosity</dt><dd id="ecology-curiosity">0.00</dd>
+          <dt>Attention</dt><dd id="ecology-attention">0.00</dd>
+          <dt>Social drive</dt><dd id="ecology-social-drive">0.00</dd>
+          <dt>Focus</dt><dd id="ecology-focus">0.00</dd>
+          <dt>Arousal</dt><dd id="ecology-arousal">0.00</dd>
+          <dt>Time period</dt><dd id="ecology-time-period">unknown</dd>
+          <dt>Ecology tick</dt><dd id="ecology-tick-health">unknown</dd>
+          <dt>Last ecology event</dt><dd id="ecology-last-event">none</dd>
+          <dt>Last proactive decision</dt><dd id="ecology-last-decision">none</dd>
+          <dt>Proactive cooldown</dt><dd id="ecology-cooldown">0s</dd>
+          <dt>Recent memory</dt><dd id="ecology-memory-count">0</dd>
+          <dt>Last observe opportunity</dt><dd id="ecology-observe-opportunity">none</dd>
+          <dt>Random source</dt><dd id="ecology-random">unknown</dd>
+        </dl>
+        <div class="debug-actions ecology-actions">
+          <button type="button" data-ecology-action="simulate-tick">simulate tick</button>
+          <button type="button" data-ecology-action="raise-curiosity">raise curiosity</button>
+          <button type="button" data-ecology-action="lower-energy">lower energy</button>
+          <button type="button" data-ecology-action="simulate-long-idle">simulate long idle</button>
+          <button type="button" data-ecology-action="simulate-rapid-switching">simulate rapid switching</button>
+          <button type="button" data-ecology-action="force-proactive-evaluation">force proactive</button>
+          <button type="button" data-ecology-action="reset-ecology">reset ecology</button>
+          <button type="button" data-ecology-action="toggle-pause">pause / resume</button>
+        </div>
+      </section>
       <section aria-labelledby="actions-title">
         <h2 id="actions-title">Behavior test</h2>
         <div class="debug-actions">

@@ -44,6 +44,7 @@ function showNotice(message) {
 
 function showClickFeedback() {
   petCharacter.classList.add('is-clicked');
+  window.pet.recordEcologyInteraction('single-click');
   showNotice('Hello!');
   window.setTimeout(() => petCharacter.classList.remove('is-clicked'), 220);
 }
@@ -182,6 +183,7 @@ petCharacter.addEventListener('click', () => {
 
 petCharacter.addEventListener('dblclick', () => {
   window.clearTimeout(singleClickTimer);
+  window.pet.recordEcologyInteraction('double-click');
   showSpeechBubble('Hello, Glandy.', 2600, { force: true });
 });
 
@@ -191,6 +193,7 @@ petCharacter.addEventListener('contextmenu', (event) => {
 });
 
 window.pet.onNotice(showNotice);
+window.pet.onEcologyBubble((message) => showSpeechBubble(message, 2600));
 window.pet.onBehaviorState(applyBehaviorState);
 window.pet.getBehaviorState().then(applyBehaviorState);
 window.requestAnimationFrame(animationLoop);
