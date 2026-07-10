@@ -41,6 +41,13 @@ const ecologyCooldown = document.querySelector('#ecology-cooldown');
 const ecologyMemoryCount = document.querySelector('#ecology-memory-count');
 const ecologyObserveOpportunity = document.querySelector('#ecology-observe-opportunity');
 const ecologyRandom = document.querySelector('#ecology-random');
+const personalityState = document.querySelector('#personality-state');
+const personalityWarmth = document.querySelector('#personality-warmth');
+const personalityCuriosity = document.querySelector('#personality-curiosity');
+const personalityPlayfulness = document.querySelector('#personality-playfulness');
+const personalityConfidence = document.querySelector('#personality-confidence');
+const personalityProtectiveness = document.querySelector('#personality-protectiveness');
+const personalitySeriousness = document.querySelector('#personality-seriousness');
 
 function formatSeconds(milliseconds) {
   return `${Math.floor(Math.max(0, milliseconds) / 1000)}s`;
@@ -150,6 +157,22 @@ function applyEcologyState(snapshot) {
   );
   ecologyObserveOpportunity.textContent = snapshot.lastObserveOpportunity ? 'recorded' : 'none';
   ecologyRandom.textContent = `${snapshot.random?.mode ?? 'unknown'} / ${snapshot.random?.seed ?? 'n/a'}`;
+  applyPersonalityState(snapshot.personality);
+}
+
+function applyPersonalityState(snapshot) {
+  if (!snapshot) {
+    return;
+  }
+
+  const traits = snapshot.traits ?? {};
+  personalityState.textContent = snapshot.state ?? 'unknown';
+  personalityWarmth.textContent = formatDrive(traits.warmth);
+  personalityCuriosity.textContent = formatDrive(traits.curiosity);
+  personalityPlayfulness.textContent = formatDrive(traits.playfulness);
+  personalityConfidence.textContent = formatDrive(traits.confidence);
+  personalityProtectiveness.textContent = formatDrive(traits.protectiveness);
+  personalitySeriousness.textContent = formatDrive(traits.seriousness);
 }
 
 document.querySelector('.debug-actions').addEventListener('click', (event) => {

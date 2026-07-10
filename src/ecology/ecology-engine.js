@@ -6,6 +6,7 @@ const { EcologyTick } = require('./ecology-tick');
 const { LocalMemory } = require('./local-memory');
 const { ProactivePlanner } = require('./proactive-planner');
 const { RandomSource } = require('./random-source');
+const { PersonalityManager } = require('../personality/personality-manager');
 
 const ECOLOGY_STATE_UPDATED = 'ecology:state.updated';
 const ECOLOGY_LOCAL_BUBBLE = 'ecology.local-bubble';
@@ -25,6 +26,7 @@ class EcologyEngine {
     this.state = new EcologyState({ now: this.now, getHour: options.getHour });
     this.memory = new LocalMemory({ capacity: this.config.memoryCapacity });
     this.random = options.random ?? new RandomSource({ mode: this.config.randomMode, seed: this.config.randomSeed });
+    this.personality = options.personalityManager ?? new PersonalityManager({ config: options.personalityConfig });
     this.planner = options.planner ?? new ProactivePlanner({
       random: this.random,
       cooldownMs: this.config.proactiveCooldownMs,
@@ -156,7 +158,10 @@ class EcologyEngine {
       currentAppCategory: this.environment.currentCategory,
       recentSwitchCount: this.environment.recentSwitchCount,
       timePeriod: time.timePeriod,
-      memory
+      memory,
+      // Reserved for future planner tuning. It is intentionally not consumed by
+      // the current planner, so personality never changes existing behavior.
+      personalityModifiers: this.personality.getEcologyModifiers()
     }, options);
     this.lastDecision = { ...decision, at: now };
     if (decision.type !== 'no-op') {
@@ -269,7 +274,9 @@ class EcologyEngine {
       lastProactiveDecision: this.lastDecision,
       proactiveCooldownMs: this.config.proactiveCooldownMs,
       lastObserveOpportunity: this.memory.values.lastAiObservationAt,
-      random: this.random.getSnapshot()
+      random: this.random.getSnapshot(),
+      personality: this.personality.getSnapshot(),
+      personalityModifiers: this.personality.getEcologyModifiers()
     };
   }
 }
