@@ -8,11 +8,13 @@ const { IdleSensor } = require('./sensors/idle-sensor');
 const { SensorManager } = require('./sensors/sensor-manager');
 
 let petWindow;
+let debugWindow;
 let isMouseIgnored = false;
 let dragOffset = null;
 let behaviorEngine = null;
 let environmentEventBus = null;
 let sensorManager = null;
+let latestAnimationSnapshot = null;
 
 function getPetWindow(webContents) {
   const window = BrowserWindow.fromWebContents(webContents);
@@ -33,7 +35,7 @@ function isScreenPoint(point) {
 }
 
 function showPetMenu(window) {
-  const menu = Menu.buildFromTemplate([
+  const items = [
     {
       label: 'Open ChatGPT',
       click: () => {
@@ -46,15 +48,90 @@ function showPetMenu(window) {
     {
       label: 'Hide Pet',
       click: () => window.hide()
-    },
+    }
+  ];
+
+  if (!app.isPackaged) {
+    items.push(
+      { type: 'separator' },
+      {
+        label: 'Toggle Debug Window',
+        click: () => toggleDebugWindow()
+      }
+    );
+  }
+
+  items.push(
     { type: 'separator' },
     {
       label: 'Quit',
       click: () => app.quit()
     }
-  ]);
+  );
+
+  const menu = Menu.buildFromTemplate(items);
 
   menu.popup({ window });
+}
+
+function sendToDebugWindow(channel, payload) {
+  if (debugWindow && !debugWindow.isDestroyed()) {
+    debugWindow.webContents.send(channel, payload);
+  }
+}
+
+function sendDebugSnapshot() {
+  sendToDebugWindow('behavior:state-changed', behaviorEngine?.getSnapshot() ?? null);
+  sendToDebugWindow('environment:state-changed', sensorManager?.getSnapshot() ?? null);
+  sendToDebugWindow('animation:state-changed', latestAnimationSnapshot);
+}
+
+function createDebugWindow() {
+  if (app.isPackaged) {
+    return;
+  }
+
+  if (debugWindow && !debugWindow.isDestroyed()) {
+    debugWindow.focus();
+    return;
+  }
+
+  debugWindow = new BrowserWindow({
+    width: 500,
+    height: 560,
+    minWidth: 400,
+    minHeight: 440,
+    title: 'Pixel Companion Debug',
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'debug', 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+
+  debugWindow.setMenuBarVisibility(false);
+  debugWindow.loadFile(path.join(__dirname, 'debug', 'index.html'));
+  debugWindow.once('ready-to-show', () => {
+    if (!debugWindow || debugWindow.isDestroyed()) {
+      return;
+    }
+
+    debugWindow.show();
+    sendDebugSnapshot();
+  });
+  debugWindow.on('closed', () => {
+    debugWindow = null;
+  });
+}
+
+function toggleDebugWindow() {
+  if (debugWindow && !debugWindow.isDestroyed()) {
+    debugWindow.close();
+    return;
+  }
+
+  createDebugWindow();
 }
 
 function createBehaviorRuntime(window) {
@@ -66,6 +143,7 @@ function createBehaviorRuntime(window) {
     if (!window.isDestroyed()) {
       window.webContents.send('behavior:state-changed', event.payload);
     }
+    sendToDebugWindow('behavior:state-changed', event.payload);
   });
 
   engine.start();
@@ -84,6 +162,7 @@ function createEnvironmentRuntime(window, eventBus, engine) {
     if (!window.isDestroyed()) {
       window.webContents.send('environment:state-changed', event.payload);
     }
+    sendToDebugWindow('environment:state-changed', event.payload);
   });
 
   manager.start();
@@ -129,6 +208,10 @@ function createWindow() {
       behaviorEngine?.stop();
       behaviorEngine = null;
       environmentEventBus = null;
+      latestAnimationSnapshot = null;
+      if (debugWindow && !debugWindow.isDestroyed()) {
+        debugWindow.close();
+      }
     }
   });
 }
@@ -181,6 +264,15 @@ ipcMain.on('pet:show-menu', (event) => {
   }
 });
 
+ipcMain.on('pet:animation-state', (event, snapshot) => {
+  if (getPetWindow(event.sender) !== petWindow || !snapshot || typeof snapshot !== 'object') {
+    return;
+  }
+
+  latestAnimationSnapshot = snapshot;
+  sendToDebugWindow('animation:state-changed', latestAnimationSnapshot);
+});
+
 ipcMain.handle('app:get-runtime-config', () => ({
   debugEnabled: !app.isPackaged
 }));
@@ -188,8 +280,13 @@ ipcMain.handle('app:get-runtime-config', () => ({
 ipcMain.handle('behavior:get-state', () => behaviorEngine?.getSnapshot() ?? null);
 ipcMain.handle('environment:get-state', () => sensorManager?.getSnapshot() ?? null);
 
-ipcMain.on('behavior:debug-request', (_event, state) => {
-  if (app.isPackaged || typeof state !== 'string' || !behaviorEngine) {
+ipcMain.on('behavior:debug-request', (event, state) => {
+  if (
+    app.isPackaged ||
+    event.sender !== debugWindow?.webContents ||
+    typeof state !== 'string' ||
+    !behaviorEngine
+  ) {
     return;
   }
 

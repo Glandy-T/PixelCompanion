@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pixel Companion Debug</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="debug-window">
+      <header>
+        <h1>Pixel Companion Debug</h1>
+        <p>Development-only runtime inspector</p>
+      </header>
+      <section aria-labelledby="behavior-title">
+        <h2 id="behavior-title">Behavior</h2>
+        <dl><dt>Current state</dt><dd id="behavior-state">idle</dd></dl>
+      </section>
+      <section aria-labelledby="animation-title">
+        <h2 id="animation-title">Animation</h2>
+        <dl>
+          <dt>Current animation</dt><dd id="animation-name">idle</dd>
+          <dt>Frame / phase</dt><dd id="animation-frame">rest</dd>
+          <dt>Transition</dt><dd id="animation-transition">settled</dd>
+          <dt>Bubble</dt><dd id="animation-bubble">...</dd>
+          <dt>Animation speed</dt><dd id="animation-speed">0.8x</dd>
+        </dl>
+      </section>
+      <section aria-labelledby="environment-title">
+        <h2 id="environment-title">Environment</h2>
+        <dl>
+          <dt>Foreground app</dt><dd id="environment-app">unknown</dd>
+          <dt>Category</dt><dd id="environment-category">other</dd>
+          <dt>Active duration</dt><dd id="environment-duration">0s</dd>
+          <dt>Idle seconds</dt><dd id="environment-idle">0s</dd>
+          <dt>Recent switches</dt><dd id="environment-switches">none</dd>
+        </dl>
+      </section>
+      <section aria-labelledby="actions-title">
+        <h2 id="actions-title">Behavior test</h2>
+        <div class="debug-actions">
+          <button type="button" data-behavior="idle">idle</button>
+          <button type="button" data-behavior="thinking">thinking</button>
+          <button type="button" data-behavior="working">working</button>
+          <button type="button" data-behavior="waiting">waiting</button>
+          <button type="button" data-behavior="success">success</button>
+          <button type="button" data-behavior="alert">alert</button>
+          <button type="button" data-behavior="sleepy">sleepy</button>
+        </div>
+      </section>
+    </main>
+    <script src="renderer.js"></script>
+  </body>
+</html>

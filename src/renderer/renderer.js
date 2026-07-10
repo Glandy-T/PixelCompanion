@@ -2,13 +2,8 @@ const petCharacter = document.querySelector('#pet-character');
 const speechBubble = document.querySelector('#speech-bubble');
 const notice = document.querySelector('#notice');
 const petWindow = document.querySelector('.pet-window');
-const debugPanel = document.querySelector('#debug-panel');
-const behaviorReadout = document.querySelector('#behavior-readout');
-const environmentApp = document.querySelector('#environment-app');
-const environmentCategory = document.querySelector('#environment-category');
-const environmentDuration = document.querySelector('#environment-duration');
-const environmentIdle = document.querySelector('#environment-idle');
-const environmentSwitches = document.querySelector('#environment-switches');
+const petMotion = document.querySelector('#pet-motion');
+const stateIndicator = document.querySelector('#state-indicator');
 
 let isPointerOverCharacter = false;
 let dragState = null;
@@ -16,6 +11,16 @@ let singleClickTimer = null;
 let noticeTimer = null;
 let bubbleTimer = null;
 let suppressClickUntil = 0;
+let lastBubbleMessage = '';
+let lastBubbleAt = 0;
+let lastAnimationReportAt = 0;
+
+const animationController = new window.PixelCompanionAnimationController.AnimationController();
+const animationPlayer = new window.PixelCompanionAnimationPlayer.AnimationPlayer({
+  root: petWindow,
+  motion: petMotion,
+  indicator: stateIndicator
+});
 
 function toScreenPoint(event) {
   return { screenX: event.screenX, screenY: event.screenY };
@@ -43,7 +48,14 @@ function showClickFeedback() {
   window.setTimeout(() => petCharacter.classList.remove('is-clicked'), 220);
 }
 
-function showSpeechBubble(message = 'Hello, Glandy.', durationMs = 2600) {
+function showSpeechBubble(message = 'Hello, Glandy.', durationMs = 2600, options = {}) {
+  const now = Date.now();
+  if (!options.force && message === lastBubbleMessage && now - lastBubbleAt < 1400) {
+    return;
+  }
+
+  lastBubbleMessage = message;
+  lastBubbleAt = now;
   speechBubble.textContent = message;
   speechBubble.hidden = false;
   window.clearTimeout(bubbleTimer);
@@ -58,38 +70,45 @@ function applyBehaviorState(snapshot) {
   }
 
   petWindow.dataset.behavior = snapshot.state;
-  behaviorReadout.textContent = snapshot.variant ?? snapshot.state;
+  const animationSnapshot = animationController.setState(snapshot.state);
+  renderAnimation(animationSnapshot);
+  const bubbleText = animationSnapshot.animation.bubbleText || snapshot.bubbleText || snapshot.state;
+  showSpeechBubble(bubbleText, Math.min(snapshot.durationMs ?? 2200, 2400));
+}
 
-  if (snapshot.state === 'idle') {
-    speechBubble.hidden = true;
+function reportAnimationState(snapshot) {
+  const now = Date.now();
+  if (now - lastAnimationReportAt < 100) {
     return;
   }
 
-  showSpeechBubble(snapshot.bubbleText || snapshot.state, snapshot.durationMs ?? 2600);
+  lastAnimationReportAt = now;
+  window.pet.reportAnimationState({
+    animation: snapshot.animation?.id ?? 'idle',
+    frame: snapshot.frame ?? 0,
+    phase: snapshot.phase ?? 'rest',
+    transition: snapshot.transition
+      ? { from: snapshot.transition.from, to: snapshot.transition.to }
+      : null,
+    bubble: snapshot.animation?.bubbleText ?? '',
+    speed: snapshot.speed ?? 1
+  });
 }
 
-function formatSeconds(milliseconds) {
-  return `${Math.floor(Math.max(0, milliseconds) / 1000)}s`;
-}
-
-function applyEnvironmentState(snapshot) {
-  if (!snapshot) {
-    return;
+function renderAnimation(snapshot) {
+  if (animationPlayer.apply(snapshot)) {
+    reportAnimationState(snapshot);
   }
+}
 
-  environmentApp.textContent = snapshot.currentApp ?? 'unknown';
-  environmentCategory.textContent = snapshot.currentCategory ?? 'other';
-  environmentDuration.textContent = formatSeconds(snapshot.activeDurationMs ?? 0);
-  environmentIdle.textContent = `${snapshot.idleSeconds ?? 0}s`;
-  environmentSwitches.textContent = snapshot.recentSwitches?.length
-    ? snapshot.recentSwitches.map((entry) => entry.app).join(' → ')
-    : 'none';
+function animationLoop(now) {
+  renderAnimation(animationController.tick(now));
+  window.requestAnimationFrame(animationLoop);
 }
 
 function updateInteractiveTarget(event) {
   const target = document.elementFromPoint(event.clientX, event.clientY);
-  const isOverInteractiveSurface = petCharacter.contains(target) || debugPanel.contains(target);
-  setInteractive(isOverInteractiveSurface);
+  setInteractive(petCharacter.contains(target));
 }
 
 document.addEventListener('mousemove', updateInteractiveTarget);
@@ -163,7 +182,7 @@ petCharacter.addEventListener('click', () => {
 
 petCharacter.addEventListener('dblclick', () => {
   window.clearTimeout(singleClickTimer);
-  showSpeechBubble();
+  showSpeechBubble('Hello, Glandy.', 2600, { force: true });
 });
 
 petCharacter.addEventListener('contextmenu', (event) => {
@@ -173,21 +192,5 @@ petCharacter.addEventListener('contextmenu', (event) => {
 
 window.pet.onNotice(showNotice);
 window.pet.onBehaviorState(applyBehaviorState);
-window.pet.onEnvironmentState(applyEnvironmentState);
-
-window.pet.getRuntimeConfig().then((config) => {
-  if (!config?.debugEnabled) {
-    return;
-  }
-
-  debugPanel.hidden = false;
-  debugPanel.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-behavior]');
-    if (button) {
-      window.pet.requestBehavior(button.dataset.behavior);
-    }
-  });
-});
-
 window.pet.getBehaviorState().then(applyBehaviorState);
-window.pet.getEnvironmentState().then(applyEnvironmentState);
+window.requestAnimationFrame(animationLoop);
