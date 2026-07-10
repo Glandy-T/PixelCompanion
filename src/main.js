@@ -6,6 +6,7 @@ const { StateStore } = require('./core/state-store');
 const { ForegroundAppSensor } = require('./sensors/foreground-app-sensor');
 const { IdleSensor } = require('./sensors/idle-sensor');
 const { SensorManager } = require('./sensors/sensor-manager');
+const { BridgeManager, BRIDGE_STATE_UPDATED } = require('./bridges/bridge-manager');
 
 let petWindow;
 let debugWindow;
@@ -14,6 +15,7 @@ let dragOffset = null;
 let behaviorEngine = null;
 let environmentEventBus = null;
 let sensorManager = null;
+let bridgeManager = null;
 let latestAnimationSnapshot = null;
 
 function getPetWindow(webContents) {
@@ -84,6 +86,7 @@ function sendDebugSnapshot() {
   sendToDebugWindow('behavior:state-changed', behaviorEngine?.getSnapshot() ?? null);
   sendToDebugWindow('environment:state-changed', sensorManager?.getSnapshot() ?? null);
   sendToDebugWindow('animation:state-changed', latestAnimationSnapshot);
+  sendToDebugWindow('bridge:state-changed', bridgeManager?.getSnapshot() ?? null);
 }
 
 function createDebugWindow() {
@@ -98,7 +101,7 @@ function createDebugWindow() {
 
   debugWindow = new BrowserWindow({
     width: 500,
-    height: 560,
+    height: 720,
     minWidth: 400,
     minHeight: 440,
     title: 'Pixel Companion Debug',
@@ -169,6 +172,15 @@ function createEnvironmentRuntime(window, eventBus, engine) {
   return manager;
 }
 
+function createBridgeRuntime(eventBus) {
+  const manager = new BridgeManager({ eventBus });
+  eventBus.on(BRIDGE_STATE_UPDATED, (event) => {
+    sendToDebugWindow('bridge:state-changed', event.payload);
+  });
+  manager.start();
+  return manager;
+}
+
 function createWindow() {
   const window = new BrowserWindow({
     width: 256,
@@ -191,6 +203,7 @@ function createWindow() {
   behaviorEngine = behaviorRuntime.engine;
   environmentEventBus = behaviorRuntime.eventBus;
   sensorManager = createEnvironmentRuntime(window, environmentEventBus, behaviorEngine);
+  bridgeManager = createBridgeRuntime(environmentEventBus);
   window.setMenuBarVisibility(false);
   window.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   window.once('ready-to-show', () => {
@@ -205,6 +218,8 @@ function createWindow() {
       isMouseIgnored = false;
       sensorManager?.stop();
       sensorManager = null;
+      bridgeManager?.stop();
+      bridgeManager = null;
       behaviorEngine?.stop();
       behaviorEngine = null;
       environmentEventBus = null;
@@ -279,6 +294,15 @@ ipcMain.handle('app:get-runtime-config', () => ({
 
 ipcMain.handle('behavior:get-state', () => behaviorEngine?.getSnapshot() ?? null);
 ipcMain.handle('environment:get-state', () => sensorManager?.getSnapshot() ?? null);
+ipcMain.handle('bridge:get-state', () => bridgeManager?.getSnapshot() ?? null);
+
+ipcMain.handle('bridge:set-sqlite-enabled', (event, enabled) => {
+  if (app.isPackaged || event.sender !== debugWindow?.webContents || !bridgeManager) {
+    return bridgeManager?.getSnapshot() ?? null;
+  }
+
+  return bridgeManager.setSqliteObservationEnabled(Boolean(enabled));
+});
 
 ipcMain.on('behavior:debug-request', (event, state) => {
   if (
