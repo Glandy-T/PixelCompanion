@@ -1,6 +1,9 @@
 const petCharacter = document.querySelector('#pet-character');
 const speechBubble = document.querySelector('#speech-bubble');
 const notice = document.querySelector('#notice');
+const petWindow = document.querySelector('.pet-window');
+const debugPanel = document.querySelector('#debug-panel');
+const behaviorReadout = document.querySelector('#behavior-readout');
 
 let isPointerOverCharacter = false;
 let dragState = null;
@@ -35,19 +38,35 @@ function showClickFeedback() {
   window.setTimeout(() => petCharacter.classList.remove('is-clicked'), 220);
 }
 
-function showSpeechBubble() {
+function showSpeechBubble(message = 'Hello, Glandy.', durationMs = 2600) {
+  speechBubble.textContent = message;
   speechBubble.hidden = false;
   window.clearTimeout(bubbleTimer);
   bubbleTimer = window.setTimeout(() => {
     speechBubble.hidden = true;
-  }, 2600);
+  }, durationMs);
+}
+
+function applyBehaviorState(snapshot) {
+  if (!snapshot?.state) {
+    return;
+  }
+
+  petWindow.dataset.behavior = snapshot.state;
+  behaviorReadout.textContent = snapshot.variant ?? snapshot.state;
+
+  if (snapshot.state === 'idle') {
+    speechBubble.hidden = true;
+    return;
+  }
+
+  showSpeechBubble(snapshot.bubbleText || snapshot.state, snapshot.durationMs ?? 2600);
 }
 
 function updateInteractiveTarget(event) {
-  const isOverCharacter = petCharacter.contains(
-    document.elementFromPoint(event.clientX, event.clientY)
-  );
-  setInteractive(isOverCharacter);
+  const target = document.elementFromPoint(event.clientX, event.clientY);
+  const isOverInteractiveSurface = petCharacter.contains(target) || debugPanel.contains(target);
+  setInteractive(isOverInteractiveSurface);
 }
 
 document.addEventListener('mousemove', updateInteractiveTarget);
@@ -130,3 +149,20 @@ petCharacter.addEventListener('contextmenu', (event) => {
 });
 
 window.pet.onNotice(showNotice);
+window.pet.onBehaviorState(applyBehaviorState);
+
+window.pet.getRuntimeConfig().then((config) => {
+  if (!config?.debugEnabled) {
+    return;
+  }
+
+  debugPanel.hidden = false;
+  debugPanel.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-behavior]');
+    if (button) {
+      window.pet.requestBehavior(button.dataset.behavior);
+    }
+  });
+});
+
+window.pet.getBehaviorState().then(applyBehaviorState);

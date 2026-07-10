@@ -8,6 +8,12 @@ contextBridge.exposeInMainWorld('pet', {
   moveDrag: (point) => ipcRenderer.send('pet:drag-move', point),
   endDrag: () => ipcRenderer.send('pet:drag-end'),
   showMenu: () => ipcRenderer.send('pet:show-menu'),
+  getRuntimeConfig: () => ipcRenderer.invoke('app:get-runtime-config'),
+  getBehaviorState: () => ipcRenderer.invoke('behavior:get-state'),
+  requestBehavior: (state) => ipcRenderer.send('behavior:debug-request', state),
+  onBehaviorState: (listener) => {
+    ipcRenderer.on('behavior:state-changed', (_event, state) => listener(state));
+  },
   onNotice: (listener) => {
     ipcRenderer.on('pet:notice', (_event, message) => listener(message));
   }

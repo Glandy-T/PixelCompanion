@@ -1,9 +1,13 @@
 const { app, BrowserWindow, ipcMain, Menu } = require('electron');
 const path = require('path');
+const { BehaviorEngine } = require('./core/behavior-engine');
+const { EventBus, createEvent } = require('./core/event-bus');
+const { StateStore } = require('./core/state-store');
 
 let petWindow;
 let isMouseIgnored = false;
 let dragOffset = null;
+let behaviorEngine = null;
 
 function getPetWindow(webContents) {
   const window = BrowserWindow.fromWebContents(webContents);
@@ -48,6 +52,21 @@ function showPetMenu(window) {
   menu.popup({ window });
 }
 
+function createBehaviorRuntime(window) {
+  const eventBus = new EventBus();
+  const stateStore = new StateStore({ state: 'idle', priority: 0, sequence: 0 });
+  const engine = new BehaviorEngine({ eventBus, stateStore });
+
+  eventBus.on('behavior:state-changed', (event) => {
+    if (!window.isDestroyed()) {
+      window.webContents.send('behavior:state-changed', event.payload);
+    }
+  });
+
+  engine.start();
+  return engine;
+}
+
 function createWindow() {
   const window = new BrowserWindow({
     width: 256,
@@ -66,6 +85,7 @@ function createWindow() {
   });
 
   petWindow = window;
+  behaviorEngine = createBehaviorRuntime(window);
   window.setMenuBarVisibility(false);
   window.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   window.once('ready-to-show', () => {
@@ -78,6 +98,8 @@ function createWindow() {
       petWindow = null;
       dragOffset = null;
       isMouseIgnored = false;
+      behaviorEngine?.stop();
+      behaviorEngine = null;
     }
   });
 }
@@ -128,6 +150,27 @@ ipcMain.on('pet:show-menu', (event) => {
   if (window) {
     showPetMenu(window);
   }
+});
+
+ipcMain.handle('app:get-runtime-config', () => ({
+  debugEnabled: !app.isPackaged
+}));
+
+ipcMain.handle('behavior:get-state', () => behaviorEngine?.getSnapshot() ?? null);
+
+ipcMain.on('behavior:debug-request', (_event, state) => {
+  if (app.isPackaged || typeof state !== 'string' || !behaviorEngine) {
+    return;
+  }
+
+  behaviorEngine.request(createEvent('behavior:request', {
+    source: 'debug-panel',
+    payload: {
+      state,
+      force: true,
+      reason: 'manual-debug-trigger'
+    }
+  }));
 });
 
 app.whenReady().then(() => {

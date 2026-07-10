@@ -20,6 +20,18 @@
         draggable="false"
       />
       </button>
+      <section id="debug-panel" class="debug-panel" aria-label="Behavior engine debug panel" hidden>
+        <strong>Behavior: <span id="behavior-readout">idle</span></strong>
+        <div class="debug-actions">
+          <button type="button" data-behavior="idle">idle</button>
+          <button type="button" data-behavior="thinking">thinking</button>
+          <button type="button" data-behavior="working">working</button>
+          <button type="button" data-behavior="waiting">waiting</button>
+          <button type="button" data-behavior="success">success</button>
+          <button type="button" data-behavior="alert">alert</button>
+          <button type="button" data-behavior="sleepy">sleepy</button>
+        </div>
+      </section>
     </main>
     <script src="renderer.js"></script>
   </body>
