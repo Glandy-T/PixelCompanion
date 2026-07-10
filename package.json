@@ -1,0 +1,19 @@
+{
+  "name": "pixel-companion",
+  "version": "0.1.0",
+  "description": "A minimal Windows desktop pixel companion.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": [
+    "electron",
+    "desktop-pet",
+    "pixel-companion"
+  ],
+  "author": "",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "electron": "^43.1.0"
+  }
+}
