@@ -8,12 +8,18 @@
   </head>
   <body>
     <main class="pet-window" aria-label="Pixel Companion placeholder character">
+      <p id="notice" class="notice" aria-live="polite"></p>
+      <p id="speech-bubble" class="speech-bubble" role="status" hidden>
+        Hello, Glandy.
+      </p>
+      <button id="pet-character" class="pet-character" type="button" aria-label="灰色像素占位角色">
       <img
         class="pixel-character"
         src="../../assets/characters/placeholder/placeholder-character.svg"
         alt="灰色像素占位角色"
         draggable="false"
       />
+      </button>
     </main>
     <script src="renderer.js"></script>
   </body>
