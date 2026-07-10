@@ -1,4 +1,6 @@
 const behaviorState = document.querySelector('#behavior-state');
+const behaviorSource = document.querySelector('#behavior-source');
+const behaviorTrigger = document.querySelector('#behavior-trigger');
 const animationName = document.querySelector('#animation-name');
 const animationFrame = document.querySelector('#animation-frame');
 const animationTransition = document.querySelector('#animation-transition');
@@ -24,6 +26,7 @@ const bridgeUnknownStatus = document.querySelector('#bridge-unknown-status');
 const bridgeLastEvent = document.querySelector('#bridge-last-event');
 const bridgePollingHealth = document.querySelector('#bridge-polling-health');
 const bridgeLastError = document.querySelector('#bridge-last-error');
+const bridgeLiveValidation = document.querySelector('#bridge-live-validation');
 
 function formatSeconds(milliseconds) {
   return `${Math.floor(Math.max(0, milliseconds) / 1000)}s`;
@@ -32,6 +35,8 @@ function formatSeconds(milliseconds) {
 function applyBehaviorState(snapshot) {
   if (snapshot?.state) {
     behaviorState.textContent = snapshot.variant ?? snapshot.state;
+    behaviorSource.textContent = snapshot.source ?? 'system';
+    behaviorTrigger.textContent = snapshot.triggerEventType ?? snapshot.lastTriggerEventType ?? 'none';
   }
 }
 
@@ -91,6 +96,10 @@ function applyBridgeState(snapshot) {
   bridgeLastEvent.textContent = snapshot.lastEvent?.type ?? 'none';
   bridgePollingHealth.textContent = snapshot.health?.status === 'healthy' ? 'healthy' : 'degraded';
   bridgeLastError.textContent = snapshot.sqlite?.lastError ?? 'none';
+  const validation = snapshot.sqlite?.validation;
+  bridgeLiveValidation.textContent = validation?.observedAt
+    ? `jobs ${validation.agentJobsRowCount}, items ${validation.agentJobItemsRowCount}, WAL ${validation.walBytes} B, SHM ${validation.shmBytes} B${validation.metadataChanged ? ' (changed)' : ''}`
+    : 'not observed';
 }
 
 document.querySelector('.debug-actions').addEventListener('click', (event) => {

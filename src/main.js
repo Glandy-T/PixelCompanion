@@ -7,6 +7,7 @@ const { ForegroundAppSensor } = require('./sensors/foreground-app-sensor');
 const { IdleSensor } = require('./sensors/idle-sensor');
 const { SensorManager } = require('./sensors/sensor-manager');
 const { BridgeManager, BRIDGE_STATE_UPDATED } = require('./bridges/bridge-manager');
+const { BridgeBehaviorIntegration } = require('./bridges/bridge-behavior-integration');
 
 let petWindow;
 let debugWindow;
@@ -16,6 +17,7 @@ let behaviorEngine = null;
 let environmentEventBus = null;
 let sensorManager = null;
 let bridgeManager = null;
+let bridgeBehaviorIntegration = null;
 let latestAnimationSnapshot = null;
 
 function getPetWindow(webContents) {
@@ -172,13 +174,15 @@ function createEnvironmentRuntime(window, eventBus, engine) {
   return manager;
 }
 
-function createBridgeRuntime(eventBus) {
+function createBridgeRuntime(eventBus, engine) {
   const manager = new BridgeManager({ eventBus });
+  const behaviorIntegration = new BridgeBehaviorIntegration({ eventBus, behaviorEngine: engine });
   eventBus.on(BRIDGE_STATE_UPDATED, (event) => {
     sendToDebugWindow('bridge:state-changed', event.payload);
   });
+  behaviorIntegration.start();
   manager.start();
-  return manager;
+  return { manager, behaviorIntegration };
 }
 
 function createWindow() {
@@ -203,7 +207,9 @@ function createWindow() {
   behaviorEngine = behaviorRuntime.engine;
   environmentEventBus = behaviorRuntime.eventBus;
   sensorManager = createEnvironmentRuntime(window, environmentEventBus, behaviorEngine);
-  bridgeManager = createBridgeRuntime(environmentEventBus);
+  const bridgeRuntime = createBridgeRuntime(environmentEventBus, behaviorEngine);
+  bridgeManager = bridgeRuntime.manager;
+  bridgeBehaviorIntegration = bridgeRuntime.behaviorIntegration;
   window.setMenuBarVisibility(false);
   window.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   window.once('ready-to-show', () => {
@@ -220,6 +226,8 @@ function createWindow() {
       sensorManager = null;
       bridgeManager?.stop();
       bridgeManager = null;
+      bridgeBehaviorIntegration?.stop();
+      bridgeBehaviorIntegration = null;
       behaviorEngine?.stop();
       behaviorEngine = null;
       environmentEventBus = null;

@@ -60,12 +60,16 @@ class CodexProcessBridge {
     const present = names.has('codex');
     const hostPresent = names.has('codex-code-mode-host');
     const previous = this.state.present;
+    const previousHost = this.state.hostPresent;
     this.state.present = present;
     this.state.hostPresent = hostPresent;
     this.state.initialized = true;
 
     if (present !== previous) {
       this.emit(present ? AI_BRIDGE_EVENTS.CODEX_STARTED : AI_BRIDGE_EVENTS.CODEX_STOPPED);
+    }
+    if (hostPresent !== previousHost) {
+      this.emit(hostPresent ? AI_BRIDGE_EVENTS.CODEX_HOST_STARTED : AI_BRIDGE_EVENTS.CODEX_HOST_STOPPED);
     }
 
     this.onUpdate(this.getSnapshot());

@@ -163,6 +163,7 @@ test('SQLite observer can aggregate agent job item statuses when no single id co
   const snapshot = observer.observe();
   assert.equal(snapshot.agentJobItems.rowIdentityAvailable, false);
   assert.equal(snapshot.lastObservedStatus, 'observed-value');
+  assert.equal(snapshot.validation.agentJobItemsRowCount, 1);
   assert.ok(events.includes(AI_BRIDGE_EVENTS.CODEX_JOB_UNKNOWN));
 });
 

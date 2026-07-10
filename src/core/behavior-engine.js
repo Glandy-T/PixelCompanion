@@ -80,6 +80,7 @@ class BehaviorEngine {
     const snapshot = this.transition(state, {
       source: request.source,
       reason: payload.reason ?? request.type,
+      triggerEventType: payload.triggerEventType ?? request.type,
       bubbleText: payload.bubbleText ?? definition.bubbleText,
       durationMs: payload.durationMs ?? definition.durationMs
     });
@@ -89,10 +90,12 @@ class BehaviorEngine {
 
   transition(state, details = {}) {
     const definition = getStateDefinition(state);
+    const previous = this.getSnapshot();
     const snapshot = this.createSnapshot(state, {
       ...details,
       priority: definition.priority,
-      variant: state === 'idle' ? this.pickIdleVariant() : state
+      variant: state === 'idle' ? this.pickIdleVariant() : state,
+      lastTriggerEventType: details.triggerEventType ?? previous.lastTriggerEventType ?? null
     });
 
     this.clearStateTimer();
@@ -126,6 +129,8 @@ class BehaviorEngine {
       priority: details.priority ?? definition.priority,
       source: details.source ?? 'behavior-engine',
       reason: details.reason ?? 'transition',
+      triggerEventType: details.triggerEventType ?? null,
+      lastTriggerEventType: details.lastTriggerEventType ?? details.triggerEventType ?? null,
       bubbleText: details.bubbleText ?? definition.bubbleText,
       durationMs,
       startedAt: now,

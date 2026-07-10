@@ -30,6 +30,7 @@ class CodexSqliteObserver {
     this.pollIntervalMs = options.pollIntervalMs ?? 5000;
     this.resolveDatabasePath = options.resolveDatabasePath ?? (() => resolveCodexStatePath());
     this.fileExists = options.fileExists ?? fs.existsSync;
+    this.fileStat = options.fileStat ?? fs.statSync;
     this.openDatabase = options.openDatabase ?? ((databasePath) => new DatabaseSync(databasePath, {
       readOnly: true,
       allowExtension: false
@@ -50,7 +51,16 @@ class CodexSqliteObserver {
       rawUnknownStatus: null,
       lastObservedAt: null,
       lastError: null,
-      pollingHealthy: true
+      pollingHealthy: true,
+      validation: {
+        agentJobsRowCount: 0,
+        agentJobItemsRowCount: 0,
+        databaseBytes: 0,
+        walBytes: 0,
+        shmBytes: 0,
+        metadataChanged: false,
+        observedAt: null
+      }
     };
   }
 
@@ -119,9 +129,10 @@ class CodexSqliteObserver {
       this.state.schemaHealth = 'healthy';
       this.state.lastError = null;
       this.state.pollingHealthy = true;
-      this.observeTableRows(database, 'agent_jobs', schema.agentJobs.columns);
-      this.observeTableRows(database, 'agent_job_items', schema.agentJobItems.columns);
-      this.state.lastObservedAt = Date.now();
+      const agentJobsRowCount = this.observeTableRows(database, 'agent_jobs', schema.agentJobs.columns);
+      const agentJobItemsRowCount = this.observeTableRows(database, 'agent_job_items', schema.agentJobItems.columns);
+      this.updateValidation(databasePath, agentJobsRowCount, agentJobItemsRowCount);
+      this.state.lastObservedAt = this.state.validation.observedAt;
     } catch {
       this.setFallback('sqlite-read-unavailable');
     } finally {
@@ -155,7 +166,7 @@ class CodexSqliteObserver {
   observeTableRows(database, tableName, columns) {
     const selectedColumns = columns.filter((column) => SAFE_COLUMNS.includes(column));
     if (!selectedColumns.includes('status')) {
-      return;
+      return 0;
     }
 
     const usesRowIdentity = selectedColumns.includes('id');
@@ -179,6 +190,36 @@ class CodexSqliteObserver {
       this.emit(AI_BRIDGE_EVENTS.CODEX_JOB_CHANGED, { table: tableName });
       this.emit(AI_BRIDGE_EVENTS.CODEX_JOB_UNKNOWN, { table: tableName });
     }
+
+    return rows.length;
+  }
+
+  updateValidation(databasePath, agentJobsRowCount, agentJobItemsRowCount) {
+    const getSize = (filePath) => {
+      try {
+        return this.fileStat(filePath).size;
+      } catch {
+        return 0;
+      }
+    };
+    const next = {
+      agentJobsRowCount,
+      agentJobItemsRowCount,
+      databaseBytes: getSize(databasePath),
+      walBytes: getSize(`${databasePath}-wal`),
+      shmBytes: getSize(`${databasePath}-shm`),
+      metadataChanged: false,
+      observedAt: Date.now()
+    };
+    const previous = this.state.validation;
+    next.metadataChanged = previous.observedAt !== null && (
+      previous.agentJobsRowCount !== next.agentJobsRowCount ||
+      previous.agentJobItemsRowCount !== next.agentJobItemsRowCount ||
+      previous.databaseBytes !== next.databaseBytes ||
+      previous.walBytes !== next.walBytes ||
+      previous.shmBytes !== next.shmBytes
+    );
+    this.state.validation = next;
   }
 
   setFallback(errorCode) {
@@ -199,7 +240,8 @@ class CodexSqliteObserver {
       rawUnknownStatus: this.state.rawUnknownStatus,
       lastObservedAt: this.state.lastObservedAt,
       lastError: this.state.lastError,
-      pollingHealthy: this.state.pollingHealthy
+      pollingHealthy: this.state.pollingHealthy,
+      validation: { ...this.state.validation }
     };
   }
 
