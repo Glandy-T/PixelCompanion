@@ -1,13 +1,18 @@
-const { app, BrowserWindow, ipcMain, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, powerMonitor } = require('electron');
 const path = require('path');
 const { BehaviorEngine } = require('./core/behavior-engine');
 const { EventBus, createEvent } = require('./core/event-bus');
 const { StateStore } = require('./core/state-store');
+const { ForegroundAppSensor } = require('./sensors/foreground-app-sensor');
+const { IdleSensor } = require('./sensors/idle-sensor');
+const { SensorManager } = require('./sensors/sensor-manager');
 
 let petWindow;
 let isMouseIgnored = false;
 let dragOffset = null;
 let behaviorEngine = null;
+let environmentEventBus = null;
+let sensorManager = null;
 
 function getPetWindow(webContents) {
   const window = BrowserWindow.fromWebContents(webContents);
@@ -64,7 +69,25 @@ function createBehaviorRuntime(window) {
   });
 
   engine.start();
-  return engine;
+  return { engine, eventBus };
+}
+
+function createEnvironmentRuntime(window, eventBus, engine) {
+  const manager = new SensorManager({
+    eventBus,
+    behaviorEngine: engine,
+    foregroundSensor: new ForegroundAppSensor(),
+    idleSensor: new IdleSensor({ powerMonitor })
+  });
+
+  eventBus.on('environment.state.updated', (event) => {
+    if (!window.isDestroyed()) {
+      window.webContents.send('environment:state-changed', event.payload);
+    }
+  });
+
+  manager.start();
+  return manager;
 }
 
 function createWindow() {
@@ -85,7 +108,10 @@ function createWindow() {
   });
 
   petWindow = window;
-  behaviorEngine = createBehaviorRuntime(window);
+  const behaviorRuntime = createBehaviorRuntime(window);
+  behaviorEngine = behaviorRuntime.engine;
+  environmentEventBus = behaviorRuntime.eventBus;
+  sensorManager = createEnvironmentRuntime(window, environmentEventBus, behaviorEngine);
   window.setMenuBarVisibility(false);
   window.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   window.once('ready-to-show', () => {
@@ -98,8 +124,11 @@ function createWindow() {
       petWindow = null;
       dragOffset = null;
       isMouseIgnored = false;
+      sensorManager?.stop();
+      sensorManager = null;
       behaviorEngine?.stop();
       behaviorEngine = null;
+      environmentEventBus = null;
     }
   });
 }
@@ -157,6 +186,7 @@ ipcMain.handle('app:get-runtime-config', () => ({
 }));
 
 ipcMain.handle('behavior:get-state', () => behaviorEngine?.getSnapshot() ?? null);
+ipcMain.handle('environment:get-state', () => sensorManager?.getSnapshot() ?? null);
 
 ipcMain.on('behavior:debug-request', (_event, state) => {
   if (app.isPackaged || typeof state !== 'string' || !behaviorEngine) {

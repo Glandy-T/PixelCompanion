@@ -7,7 +7,7 @@ const STATE_DEFINITIONS = Object.freeze({
     variants: Object.freeze(['idle', 'idle-glance', 'idle-breathe'])
   }),
   sleepy: Object.freeze({
-    priority: 10,
+    priority: 40,
     durationMs: 9000,
     cooldownMs: 3000,
     bubbleText: 'Feeling sleepy...'

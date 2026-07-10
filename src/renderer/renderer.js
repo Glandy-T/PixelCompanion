@@ -4,6 +4,11 @@ const notice = document.querySelector('#notice');
 const petWindow = document.querySelector('.pet-window');
 const debugPanel = document.querySelector('#debug-panel');
 const behaviorReadout = document.querySelector('#behavior-readout');
+const environmentApp = document.querySelector('#environment-app');
+const environmentCategory = document.querySelector('#environment-category');
+const environmentDuration = document.querySelector('#environment-duration');
+const environmentIdle = document.querySelector('#environment-idle');
+const environmentSwitches = document.querySelector('#environment-switches');
 
 let isPointerOverCharacter = false;
 let dragState = null;
@@ -61,6 +66,24 @@ function applyBehaviorState(snapshot) {
   }
 
   showSpeechBubble(snapshot.bubbleText || snapshot.state, snapshot.durationMs ?? 2600);
+}
+
+function formatSeconds(milliseconds) {
+  return `${Math.floor(Math.max(0, milliseconds) / 1000)}s`;
+}
+
+function applyEnvironmentState(snapshot) {
+  if (!snapshot) {
+    return;
+  }
+
+  environmentApp.textContent = snapshot.currentApp ?? 'unknown';
+  environmentCategory.textContent = snapshot.currentCategory ?? 'other';
+  environmentDuration.textContent = formatSeconds(snapshot.activeDurationMs ?? 0);
+  environmentIdle.textContent = `${snapshot.idleSeconds ?? 0}s`;
+  environmentSwitches.textContent = snapshot.recentSwitches?.length
+    ? snapshot.recentSwitches.map((entry) => entry.app).join(' → ')
+    : 'none';
 }
 
 function updateInteractiveTarget(event) {
@@ -150,6 +173,7 @@ petCharacter.addEventListener('contextmenu', (event) => {
 
 window.pet.onNotice(showNotice);
 window.pet.onBehaviorState(applyBehaviorState);
+window.pet.onEnvironmentState(applyEnvironmentState);
 
 window.pet.getRuntimeConfig().then((config) => {
   if (!config?.debugEnabled) {
@@ -166,3 +190,4 @@ window.pet.getRuntimeConfig().then((config) => {
 });
 
 window.pet.getBehaviorState().then(applyBehaviorState);
+window.pet.getEnvironmentState().then(applyEnvironmentState);

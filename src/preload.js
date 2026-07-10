@@ -10,9 +10,13 @@ contextBridge.exposeInMainWorld('pet', {
   showMenu: () => ipcRenderer.send('pet:show-menu'),
   getRuntimeConfig: () => ipcRenderer.invoke('app:get-runtime-config'),
   getBehaviorState: () => ipcRenderer.invoke('behavior:get-state'),
+  getEnvironmentState: () => ipcRenderer.invoke('environment:get-state'),
   requestBehavior: (state) => ipcRenderer.send('behavior:debug-request', state),
   onBehaviorState: (listener) => {
     ipcRenderer.on('behavior:state-changed', (_event, state) => listener(state));
+  },
+  onEnvironmentState: (listener) => {
+    ipcRenderer.on('environment:state-changed', (_event, state) => listener(state));
   },
   onNotice: (listener) => {
     ipcRenderer.on('pet:notice', (_event, message) => listener(message));

@@ -22,6 +22,13 @@
       </button>
       <section id="debug-panel" class="debug-panel" aria-label="Behavior engine debug panel" hidden>
         <strong>Behavior: <span id="behavior-readout">idle</span></strong>
+        <div class="environment-readout" aria-label="Environment sensor debug data">
+          <span>App: <b id="environment-app">unknown</b></span>
+          <span>Category: <b id="environment-category">other</b></span>
+          <span>Active: <b id="environment-duration">0s</b></span>
+          <span>Idle: <b id="environment-idle">0s</b></span>
+          <span>Switches: <b id="environment-switches">none</b></span>
+        </div>
         <div class="debug-actions">
           <button type="button" data-behavior="idle">idle</button>
           <button type="button" data-behavior="thinking">thinking</button>
