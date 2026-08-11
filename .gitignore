@@ -21,9 +21,7 @@ config/private/
 # Local-only character assets (keep real assets outside this repository)
 private-assets/
 local-assets/
-assets/characters/local/
-assets/characters/private/
-assets/characters/personal/
+assets/characters/*/
 assets/animations/local/
 assets/animations/private/
 
