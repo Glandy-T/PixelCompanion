@@ -1,4 +1,5 @@
 const petCharacter = document.querySelector('#pet-character');
+const characterImage = document.querySelector('#character-image');
 const speechBubble = document.querySelector('#speech-bubble');
 const notice = document.querySelector('#notice');
 const petWindow = document.querySelector('.pet-window');
@@ -63,6 +64,22 @@ function showSpeechBubble(message = 'Hello, Glandy.', durationMs = 2600, options
   bubbleTimer = window.setTimeout(() => {
     speechBubble.hidden = true;
   }, durationMs);
+}
+
+function applyCharacterProfile(profile) {
+  if (profile?.source !== 'private' || typeof profile.imageUrl !== 'string') {
+    return;
+  }
+
+  const candidate = new Image();
+  candidate.onload = () => {
+    characterImage.src = profile.imageUrl;
+    characterImage.alt = 'Local pixel character';
+    petCharacter.setAttribute('aria-label', 'Local pixel character');
+  };
+  // Keep the public placeholder visible if a local file disappears or fails to decode.
+  candidate.onerror = () => {};
+  candidate.src = profile.imageUrl;
 }
 
 function applyBehaviorState(snapshot) {
@@ -195,5 +212,6 @@ petCharacter.addEventListener('contextmenu', (event) => {
 window.pet.onNotice(showNotice);
 window.pet.onEcologyBubble((message) => showSpeechBubble(message, 2600));
 window.pet.onBehaviorState(applyBehaviorState);
+window.pet.getCharacterProfile().then(applyCharacterProfile);
 window.pet.getBehaviorState().then(applyBehaviorState);
 window.requestAnimationFrame(animationLoop);

@@ -10,6 +10,7 @@ const { BridgeManager, BRIDGE_STATE_UPDATED } = require('./bridges/bridge-manage
 const { BridgeBehaviorIntegration } = require('./bridges/bridge-behavior-integration');
 const { ECOLOGY_LOCAL_BUBBLE, ECOLOGY_STATE_UPDATED, EcologyEngine } = require('./ecology/ecology-engine');
 const { loadPrivatePersonalityConfig } = require('./local-data/private-data-loader');
+const { createPrivateCharacterRendererProfile, getPublicPlaceholderProfile } = require('./local-data/private-character-adapter');
 
 let petWindow;
 let debugWindow;
@@ -22,6 +23,7 @@ let bridgeManager = null;
 let bridgeBehaviorIntegration = null;
 let ecologyEngine = null;
 let latestAnimationSnapshot = null;
+let characterRendererProfile = getPublicPlaceholderProfile();
 
 function getPetWindow(webContents) {
   const window = BrowserWindow.fromWebContents(webContents);
@@ -226,6 +228,7 @@ function createWindow() {
   });
 
   petWindow = window;
+  characterRendererProfile = createPrivateCharacterRendererProfile({ repositoryRoot: app.getAppPath() });
   const behaviorRuntime = createBehaviorRuntime(window);
   behaviorEngine = behaviorRuntime.engine;
   environmentEventBus = behaviorRuntime.eventBus;
@@ -258,6 +261,7 @@ function createWindow() {
       behaviorEngine = null;
       environmentEventBus = null;
       latestAnimationSnapshot = null;
+      characterRendererProfile = getPublicPlaceholderProfile();
       if (debugWindow && !debugWindow.isDestroyed()) {
         debugWindow.close();
       }
@@ -330,6 +334,9 @@ ipcMain.handle('behavior:get-state', () => behaviorEngine?.getSnapshot() ?? null
 ipcMain.handle('environment:get-state', () => sensorManager?.getSnapshot() ?? null);
 ipcMain.handle('bridge:get-state', () => bridgeManager?.getSnapshot() ?? null);
 ipcMain.handle('ecology:get-state', () => ecologyEngine?.getSnapshot() ?? null);
+ipcMain.handle('character:get-renderer-profile', (event) => {
+  return getPetWindow(event.sender) === petWindow ? characterRendererProfile : getPublicPlaceholderProfile();
+});
 
 ipcMain.handle('bridge:set-sqlite-enabled', (event, enabled) => {
   if (app.isPackaged || event.sender !== debugWindow?.webContents || !bridgeManager) {

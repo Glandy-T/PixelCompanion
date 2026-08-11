@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('pet', {
   endDrag: () => ipcRenderer.send('pet:drag-end'),
   showMenu: () => ipcRenderer.send('pet:show-menu'),
   recordEcologyInteraction: (kind) => ipcRenderer.send('ecology:interaction', kind),
+  getCharacterProfile: () => ipcRenderer.invoke('character:get-renderer-profile'),
   getBehaviorState: () => ipcRenderer.invoke('behavior:get-state'),
   reportAnimationState: (snapshot) => ipcRenderer.send('pet:animation-state', snapshot),
   onBehaviorState: (listener) => {
