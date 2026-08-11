@@ -5,7 +5,9 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win portable"
   },
   "keywords": [
     "electron",
@@ -15,6 +17,26 @@
   "author": "",
   "license": "UNLICENSED",
   "devDependencies": {
-    "electron": "^43.1.0"
+    "electron": "^43.1.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "io.github.pixelcompanion.desktop",
+    "productName": "PixelCompanion",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/characters/placeholder/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    }
   }
 }
