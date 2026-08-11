@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, nativeImage, powerMonitor, screen, Tray } = require('electron');
 const path = require('path');
 const { BehaviorEngine } = require('./core/behavior-engine');
 const { EventBus, createEvent } = require('./core/event-bus');
@@ -13,6 +13,8 @@ const { loadPrivatePersonalityConfig } = require('./local-data/private-data-load
 const { createPrivateCharacterRendererProfile, getPublicPlaceholderProfile } = require('./local-data/private-character-adapter');
 const { chooseLocalReaction } = require('./interactions/personality-reactions');
 const { buildPetMenuTemplate } = require('./interactions/pet-menu');
+const { buildTrayMenuTemplate } = require('./lifecycle/tray-menu');
+const { WINDOW_PREFERENCES_FILE, WindowPreferencesStore, resolveWindowPosition } = require('./lifecycle/window-preferences');
 
 let petWindow;
 let debugWindow;
@@ -26,6 +28,9 @@ let bridgeBehaviorIntegration = null;
 let ecologyEngine = null;
 let latestAnimationSnapshot = null;
 let characterRendererProfile = getPublicPlaceholderProfile();
+let tray = null;
+let windowPreferences = null;
+let windowPositionTimer = null;
 
 function getPetWindow(webContents) {
   const window = BrowserWindow.fromWebContents(webContents);
@@ -46,6 +51,7 @@ function isScreenPoint(point) {
 }
 
 function showPetMenu(window) {
+  const loginSettings = app.getLoginItemSettings();
   const menu = Menu.buildFromTemplate(buildPetMenuTemplate({
     currentState: behaviorEngine?.getSnapshot().state ?? 'idle',
     alwaysOnTop: window.isAlwaysOnTop(),
@@ -57,13 +63,105 @@ function showPetMenu(window) {
         'Open ChatGPT is a placeholder: desktop app focus is not configured yet.'
       );
     },
-    onToggleAlwaysOnTop: (item) => window.setAlwaysOnTop(Boolean(item.checked)),
-    onHide: () => window.hide(),
+    onToggleAlwaysOnTop: (item) => setPetAlwaysOnTop(Boolean(item.checked)),
+    launchAtLoginAvailable: app.isPackaged,
+    launchAtLogin: loginSettings.openAtLogin,
+    onToggleLaunchAtLogin: (item) => setLaunchAtLogin(Boolean(item.checked)),
+    onHide: () => hidePetWindow(),
     onToggleDebug: () => toggleDebugWindow(),
     onQuit: () => app.quit()
   }));
 
   menu.popup({ window });
+}
+
+function createTrayIcon() {
+  const svg = [
+    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">',
+    '<path fill="#d1d5db" d="M4 2h8v2h2v8h-2v2H4v-2H2V4h2z"/>',
+    '<path fill="#374151" d="M5 6h2v2H5zm4 0h2v2H9zM6 10h4v1H6z"/>',
+    '</svg>'
+  ].join('');
+  return nativeImage.createFromDataURL(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`).resize({ width: 16, height: 16 });
+}
+
+function updateTrayMenu() {
+  if (!tray || tray.isDestroyed()) {
+    return;
+  }
+
+  const loginSettings = app.getLoginItemSettings();
+  tray.setContextMenu(Menu.buildFromTemplate(buildTrayMenuTemplate({
+    petVisible: Boolean(petWindow && !petWindow.isDestroyed() && petWindow.isVisible()),
+    alwaysOnTop: Boolean(petWindow && !petWindow.isDestroyed() && petWindow.isAlwaysOnTop()),
+    launchAtLoginAvailable: app.isPackaged,
+    launchAtLogin: loginSettings.openAtLogin,
+    debugEnabled: !app.isPackaged,
+    onTogglePet: () => togglePetWindow(),
+    onToggleAlwaysOnTop: (item) => setPetAlwaysOnTop(Boolean(item.checked)),
+    onToggleLaunchAtLogin: (item) => setLaunchAtLogin(Boolean(item.checked)),
+    onToggleDebug: () => toggleDebugWindow(),
+    onQuit: () => app.quit()
+  })));
+}
+
+function createTray() {
+  tray = new Tray(createTrayIcon());
+  tray.setToolTip('Pixel Companion');
+  tray.on('click', () => togglePetWindow());
+  updateTrayMenu();
+}
+
+function showPetWindow() {
+  if (!petWindow || petWindow.isDestroyed()) {
+    createWindow();
+    return;
+  }
+  petWindow.show();
+  updateTrayMenu();
+}
+
+function hidePetWindow() {
+  if (petWindow && !petWindow.isDestroyed()) {
+    petWindow.hide();
+  }
+  updateTrayMenu();
+}
+
+function togglePetWindow() {
+  if (petWindow && !petWindow.isDestroyed() && petWindow.isVisible()) {
+    hidePetWindow();
+  } else {
+    showPetWindow();
+  }
+}
+
+function persistWindowPreferences(window = petWindow) {
+  if (!windowPreferences || !window || window.isDestroyed()) {
+    return;
+  }
+  const [x, y] = window.getPosition();
+  windowPreferences.save({ x, y, alwaysOnTop: window.isAlwaysOnTop() });
+}
+
+function scheduleWindowPreferencesSave(window) {
+  clearTimeout(windowPositionTimer);
+  windowPositionTimer = setTimeout(() => persistWindowPreferences(window), 250);
+}
+
+function setPetAlwaysOnTop(enabled) {
+  if (petWindow && !petWindow.isDestroyed()) {
+    petWindow.setAlwaysOnTop(enabled);
+    persistWindowPreferences(petWindow);
+  }
+  updateTrayMenu();
+}
+
+function setLaunchAtLogin(enabled) {
+  if (app.isPackaged) {
+    app.setLoginItemSettings({ openAtLogin: enabled });
+  }
+  updateTrayMenu();
 }
 
 function handlePetInteraction(window, action, options = {}) {
@@ -208,15 +306,18 @@ function createEcologyRuntime(eventBus) {
 }
 
 function createWindow() {
+  const preferences = windowPreferences?.load() ?? { alwaysOnTop: true };
+  const position = resolveWindowPosition(preferences, screen.getAllDisplays());
   const window = new BrowserWindow({
     width: 256,
     height: 256,
     transparent: true,
     frame: false,
-    alwaysOnTop: true,
+    alwaysOnTop: preferences.alwaysOnTop,
     resizable: false,
     hasShadow: false,
     show: false,
+    ...(position ?? {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -239,7 +340,11 @@ function createWindow() {
   window.once('ready-to-show', () => {
     setMousePassthrough(window, true);
     window.show();
+    updateTrayMenu();
   });
+  window.on('show', updateTrayMenu);
+  window.on('hide', updateTrayMenu);
+  window.on('moved', () => scheduleWindowPreferencesSave(window));
 
   window.on('closed', () => {
     if (petWindow === window) {
@@ -259,6 +364,8 @@ function createWindow() {
       environmentEventBus = null;
       latestAnimationSnapshot = null;
       characterRendererProfile = getPublicPlaceholderProfile();
+      clearTimeout(windowPositionTimer);
+      windowPositionTimer = null;
       if (debugWindow && !debugWindow.isDestroyed()) {
         debugWindow.close();
       }
@@ -383,7 +490,11 @@ ipcMain.on('behavior:debug-request', (event, state) => {
 
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
+  windowPreferences = new WindowPreferencesStore({
+    filePath: path.join(app.getPath('userData'), WINDOW_PREFERENCES_FILE)
+  });
   createWindow();
+  createTray();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -394,4 +505,11 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   app.quit();
+});
+
+app.on('before-quit', () => {
+  clearTimeout(windowPositionTimer);
+  persistWindowPreferences();
+  tray?.destroy();
+  tray = null;
 });

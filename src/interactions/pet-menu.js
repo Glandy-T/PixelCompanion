@@ -22,6 +22,15 @@ function buildPetMenuTemplate(options = {}) {
     { label: 'Hide Pet', click: options.onHide }
   ];
 
+  if (options.launchAtLoginAvailable) {
+    items.splice(items.length - 1, 0, {
+      label: 'Launch at Login',
+      type: 'checkbox',
+      checked: Boolean(options.launchAtLogin),
+      click: options.onToggleLaunchAtLogin
+    });
+  }
+
   if (options.debugEnabled) {
     items.push(
       { type: 'separator' },
