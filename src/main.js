@@ -9,6 +9,7 @@ const { SensorManager } = require('./sensors/sensor-manager');
 const { BridgeManager, BRIDGE_STATE_UPDATED } = require('./bridges/bridge-manager');
 const { BridgeBehaviorIntegration } = require('./bridges/bridge-behavior-integration');
 const { ECOLOGY_LOCAL_BUBBLE, ECOLOGY_STATE_UPDATED, EcologyEngine } = require('./ecology/ecology-engine');
+const { loadPrivatePersonalityConfig } = require('./local-data/private-data-loader');
 
 let petWindow;
 let debugWindow;
@@ -189,7 +190,12 @@ function createBridgeRuntime(eventBus, engine) {
 }
 
 function createEcologyRuntime(eventBus) {
-  const engine = new EcologyEngine({ eventBus });
+  const privatePersonality = loadPrivatePersonalityConfig({ repositoryRoot: app.getAppPath() });
+  const engine = new EcologyEngine({
+    eventBus,
+    // Optional, external-only local data. It affects no current behavior logic.
+    personalityConfig: privatePersonality.config ?? undefined
+  });
   eventBus.on(ECOLOGY_STATE_UPDATED, (event) => {
     sendToDebugWindow('ecology:state-changed', event.payload);
   });

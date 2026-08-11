@@ -23,6 +23,23 @@ private-assets/
 local-assets/
 assets/characters/local/
 assets/characters/private/
+assets/characters/personal/
+assets/animations/local/
+assets/animations/private/
+
+# Private companion data and design sources (never commit)
+.pixelcompanion/
+private/
+design/local/
+design/private/
+private-design/
+*.private.psd
+*.private.aseprite
+*.private.clip
+
+# Keep the public placeholder character directory versioned.
+!assets/characters/placeholder/
+!assets/characters/placeholder/**
 
 # JavaScript build output and local environment values
 node_modules/
