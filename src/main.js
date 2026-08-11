@@ -15,6 +15,8 @@ const { chooseLocalReaction } = require('./interactions/personality-reactions');
 const { buildPetMenuTemplate } = require('./interactions/pet-menu');
 const { buildTrayMenuTemplate } = require('./lifecycle/tray-menu');
 const { WINDOW_PREFERENCES_FILE, WindowPreferencesStore, resolveWindowPosition } = require('./lifecycle/window-preferences');
+const { RELATIONSHIP_STATE_UPDATED, RelationshipManager } = require('./relationship/relationship-manager');
+const { RELATIONSHIP_STATE_FILE, RelationshipStore } = require('./relationship/relationship-store');
 
 let petWindow;
 let debugWindow;
@@ -31,6 +33,7 @@ let characterRendererProfile = getPublicPlaceholderProfile();
 let tray = null;
 let windowPreferences = null;
 let windowPositionTimer = null;
+let relationshipManager = null;
 
 function getPetWindow(webContents) {
   const window = BrowserWindow.fromWebContents(webContents);
@@ -172,6 +175,7 @@ function handlePetInteraction(window, action, options = {}) {
   const traits = ecologyEngine?.getSnapshot().personality?.traits ?? {};
   const reaction = chooseLocalReaction(action, traits);
   ecologyEngine?.recordInteraction(`quick:${action}`);
+  relationshipManager?.recordInteraction(action);
   if (options.notifyRenderer !== false) {
     window.webContents.send('pet:interaction-response', reaction);
   }
@@ -190,6 +194,7 @@ function sendDebugSnapshot() {
   sendToDebugWindow('animation:state-changed', latestAnimationSnapshot);
   sendToDebugWindow('bridge:state-changed', bridgeManager?.getSnapshot() ?? null);
   sendToDebugWindow('ecology:state-changed', ecologyEngine?.getSnapshot() ?? null);
+  sendToDebugWindow('relationship:state-changed', relationshipManager?.getSnapshot() ?? null);
 }
 
 function createDebugWindow() {
@@ -305,6 +310,18 @@ function createEcologyRuntime(eventBus) {
   return engine;
 }
 
+function createRelationshipRuntime(eventBus) {
+  const store = new RelationshipStore({
+    filePath: path.join(app.getPath('userData'), RELATIONSHIP_STATE_FILE)
+  });
+  const manager = new RelationshipManager({ eventBus, store });
+  eventBus.on(RELATIONSHIP_STATE_UPDATED, (event) => {
+    sendToDebugWindow('relationship:state-changed', event.payload);
+  });
+  manager.start();
+  return manager;
+}
+
 function createWindow() {
   const preferences = windowPreferences?.load() ?? { alwaysOnTop: true };
   const position = resolveWindowPosition(preferences, screen.getAllDisplays());
@@ -335,6 +352,7 @@ function createWindow() {
   bridgeManager = bridgeRuntime.manager;
   bridgeBehaviorIntegration = bridgeRuntime.behaviorIntegration;
   ecologyEngine = createEcologyRuntime(environmentEventBus);
+  relationshipManager = createRelationshipRuntime(environmentEventBus);
   window.setMenuBarVisibility(false);
   window.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   window.once('ready-to-show', () => {
@@ -359,6 +377,8 @@ function createWindow() {
       bridgeBehaviorIntegration = null;
       ecologyEngine?.stop();
       ecologyEngine = null;
+      relationshipManager?.stop();
+      relationshipManager = null;
       behaviorEngine?.stop();
       behaviorEngine = null;
       environmentEventBus = null;
@@ -438,6 +458,7 @@ ipcMain.handle('behavior:get-state', () => behaviorEngine?.getSnapshot() ?? null
 ipcMain.handle('environment:get-state', () => sensorManager?.getSnapshot() ?? null);
 ipcMain.handle('bridge:get-state', () => bridgeManager?.getSnapshot() ?? null);
 ipcMain.handle('ecology:get-state', () => ecologyEngine?.getSnapshot() ?? null);
+ipcMain.handle('relationship:get-state', () => relationshipManager?.getSnapshot() ?? null);
 ipcMain.handle('character:get-renderer-profile', (event) => {
   return getPetWindow(event.sender) === petWindow ? characterRendererProfile : getPublicPlaceholderProfile();
 });
@@ -457,6 +478,7 @@ ipcMain.handle('bridge:set-sqlite-enabled', (event, enabled) => {
 ipcMain.on('ecology:interaction', (event, kind) => {
   if (getPetWindow(event.sender) === petWindow && typeof kind === 'string') {
     ecologyEngine?.recordInteraction(kind);
+    relationshipManager?.recordInteraction(kind);
   }
 });
 

@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('debug', {
   getEnvironmentState: () => ipcRenderer.invoke('environment:get-state'),
   getBridgeState: () => ipcRenderer.invoke('bridge:get-state'),
   getEcologyState: () => ipcRenderer.invoke('ecology:get-state'),
+  getRelationshipState: () => ipcRenderer.invoke('relationship:get-state'),
   setSqliteObservationEnabled: (enabled) => ipcRenderer.invoke('bridge:set-sqlite-enabled', Boolean(enabled)),
   ecologyDebugAction: (action) => ipcRenderer.invoke('ecology:debug-action', action),
   requestBehavior: (state) => ipcRenderer.send('behavior:debug-request', state),
@@ -22,5 +23,8 @@ contextBridge.exposeInMainWorld('debug', {
   },
   onEcologyState: (listener) => {
     ipcRenderer.on('ecology:state-changed', (_event, state) => listener(state));
+  },
+  onRelationshipState: (listener) => {
+    ipcRenderer.on('relationship:state-changed', (_event, state) => listener(state));
   }
 });

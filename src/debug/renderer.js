@@ -48,6 +48,13 @@ const personalityPlayfulness = document.querySelector('#personality-playfulness'
 const personalityConfidence = document.querySelector('#personality-confidence');
 const personalityProtectiveness = document.querySelector('#personality-protectiveness');
 const personalitySeriousness = document.querySelector('#personality-seriousness');
+const relationshipBond = document.querySelector('#relationship-bond');
+const relationshipFamiliarity = document.querySelector('#relationship-familiarity');
+const relationshipCount = document.querySelector('#relationship-count');
+const relationshipLastAction = document.querySelector('#relationship-last-action');
+const relationshipLastAt = document.querySelector('#relationship-last-at');
+const relationshipPersistence = document.querySelector('#relationship-persistence');
+const relationshipContent = document.querySelector('#relationship-content');
 
 function formatSeconds(milliseconds) {
   return `${Math.floor(Math.max(0, milliseconds) / 1000)}s`;
@@ -175,6 +182,21 @@ function applyPersonalityState(snapshot) {
   personalitySeriousness.textContent = formatDrive(traits.seriousness);
 }
 
+function applyRelationshipState(snapshot) {
+  if (!snapshot) {
+    return;
+  }
+  relationshipBond.textContent = formatDrive(snapshot.bond);
+  relationshipFamiliarity.textContent = formatDrive(snapshot.familiarity);
+  relationshipCount.textContent = String(snapshot.interactionCount ?? 0);
+  relationshipLastAction.textContent = snapshot.lastAction ?? 'none';
+  relationshipLastAt.textContent = snapshot.lastInteractionAt
+    ? new Date(snapshot.lastInteractionAt).toLocaleTimeString()
+    : 'none';
+  relationshipPersistence.textContent = snapshot.persistence ?? 'local-only';
+  relationshipContent.textContent = snapshot.storesContent ? 'yes' : 'no';
+}
+
 document.querySelector('.debug-actions').addEventListener('click', (event) => {
   const button = event.target.closest('[data-behavior]');
   if (button) {
@@ -199,7 +221,9 @@ window.debug.onEnvironmentState(applyEnvironmentState);
 window.debug.onAnimationState(applyAnimationState);
 window.debug.onBridgeState(applyBridgeState);
 window.debug.onEcologyState(applyEcologyState);
+window.debug.onRelationshipState(applyRelationshipState);
 window.debug.getBehaviorState().then(applyBehaviorState);
 window.debug.getEnvironmentState().then(applyEnvironmentState);
 window.debug.getBridgeState().then(applyBridgeState);
 window.debug.getEcologyState().then(applyEcologyState);
+window.debug.getRelationshipState().then(applyRelationshipState);
