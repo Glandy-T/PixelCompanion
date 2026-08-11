@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('pet', {
   interact: (action) => ipcRenderer.invoke('pet:interact', action),
   recordEcologyInteraction: (kind) => ipcRenderer.send('ecology:interaction', kind),
   getCharacterProfile: () => ipcRenderer.invoke('character:get-renderer-profile'),
+  getUiSettings: () => ipcRenderer.invoke('settings:get'),
   getBehaviorState: () => ipcRenderer.invoke('behavior:get-state'),
   reportAnimationState: (snapshot) => ipcRenderer.send('pet:animation-state', snapshot),
   onBehaviorState: (listener) => {
@@ -24,5 +25,8 @@ contextBridge.exposeInMainWorld('pet', {
   },
   onInteractionResponse: (listener) => {
     ipcRenderer.on('pet:interaction-response', (_event, reaction) => listener(reaction));
+  },
+  onUiSettingsChanged: (listener) => {
+    ipcRenderer.on('settings:state-changed', (_event, state) => listener(state));
   }
 });

@@ -1,0 +1,22 @@
+:root { color-scheme: dark; font-family: system-ui, sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #111827; color: #f3f4f6; }
+main { width: min(100%, 520px); margin: 0 auto; padding: 22px; }
+header { padding-bottom: 16px; border-bottom: 1px solid #374151; }
+h1, h2, p { margin: 0; }
+h1 { font-size: 19px; line-height: 1.25; }
+header p { margin-top: 4px; color: #aeb8c8; font-size: 13px; }
+section { padding: 18px 0; border-bottom: 1px solid #283244; }
+h2 { margin-bottom: 10px; color: #bfdbfe; font-size: 13px; }
+.setting-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 54px; cursor: pointer; }
+.setting-row + .setting-row { border-top: 1px solid #202a3a; }
+.setting-row span { display: grid; gap: 3px; }
+.setting-row strong { font-size: 13px; font-weight: 650; }
+.setting-row small { color: #aeb8c8; font-size: 12px; line-height: 1.35; }
+input[type="checkbox"] { width: 18px; height: 18px; accent-color: #60a5fa; cursor: pointer; }
+input:focus-visible { outline: 2px solid #93c5fd; outline-offset: 3px; }
+input:disabled { cursor: not-allowed; opacity: 0.5; }
+dl { display: grid; grid-template-columns: 150px 1fr; gap: 7px 12px; margin: 0; font-size: 12px; }
+dt { color: #aeb8c8; }
+dd { margin: 0; font-family: ui-monospace, Consolas, monospace; }
+.save-status { padding-top: 14px; color: #aeb8c8; font-size: 12px; }

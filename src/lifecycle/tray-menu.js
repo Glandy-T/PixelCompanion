@@ -9,7 +9,8 @@ function buildTrayMenuTemplate(options = {}) {
       type: 'checkbox',
       checked: Boolean(options.alwaysOnTop),
       click: options.onToggleAlwaysOnTop
-    }
+    },
+    { label: 'Settings...', click: options.onOpenSettings }
   ];
 
   if (options.launchAtLoginAvailable) {

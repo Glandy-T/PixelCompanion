@@ -17,6 +17,7 @@ let lastBubbleMessage = '';
 let lastBubbleAt = 0;
 let lastAnimationReportAt = 0;
 let quickActionsTimer = null;
+let quickActionsEnabled = true;
 
 const animationController = new window.PixelCompanionAnimationController.AnimationController();
 const animationPlayer = new window.PixelCompanionAnimationPlayer.AnimationPlayer({
@@ -40,9 +41,21 @@ function setInteractive(isInteractive) {
 }
 
 function showQuickActions() {
+  if (!quickActionsEnabled) {
+    return;
+  }
   window.clearTimeout(quickActionsTimer);
   quickActions.classList.add('is-visible');
   quickActions.setAttribute('aria-hidden', 'false');
+}
+
+function applyUiSettings(settings) {
+  quickActionsEnabled = settings?.quickActionsEnabled !== false;
+  if (!quickActionsEnabled) {
+    window.clearTimeout(quickActionsTimer);
+    quickActions.classList.remove('is-visible');
+    quickActions.setAttribute('aria-hidden', 'true');
+  }
 }
 
 function scheduleQuickActionsHide() {
@@ -263,6 +276,8 @@ window.pet.onInteractionResponse((reaction) => {
   }
 });
 window.pet.onBehaviorState(applyBehaviorState);
+window.pet.onUiSettingsChanged(applyUiSettings);
 window.pet.getCharacterProfile().then(applyCharacterProfile);
+window.pet.getUiSettings().then(applyUiSettings);
 window.pet.getBehaviorState().then(applyBehaviorState);
 window.requestAnimationFrame(animationLoop);

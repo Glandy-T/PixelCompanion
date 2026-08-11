@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pixel Companion Settings</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Pixel Companion</h1>
+        <p>Local desktop companion settings</p>
+      </header>
+
+      <section aria-labelledby="interaction-title">
+        <h2 id="interaction-title">Interaction</h2>
+        <label class="setting-row">
+          <span><strong>Hover quick actions</strong><small>Show Pat, Hello, and More below the pet.</small></span>
+          <input id="quick-actions" type="checkbox" />
+        </label>
+        <label class="setting-row">
+          <span><strong>Local proactive ecology</strong><small>Allow local-only ambient decisions and reminders.</small></span>
+          <input id="proactive-ecology" type="checkbox" />
+        </label>
+      </section>
+
+      <section aria-labelledby="window-title">
+        <h2 id="window-title">Window</h2>
+        <label class="setting-row">
+          <span><strong>Always on top</strong><small>Keep the pet above normal windows.</small></span>
+          <input id="always-on-top" type="checkbox" />
+        </label>
+        <label class="setting-row" id="launch-row">
+          <span><strong>Launch at login</strong><small>Available in packaged Windows builds.</small></span>
+          <input id="launch-at-login" type="checkbox" />
+        </label>
+      </section>
+
+      <section aria-labelledby="local-title">
+        <h2 id="local-title">Local data</h2>
+        <dl>
+          <dt>Character source</dt><dd id="character-source">placeholder</dd>
+          <dt>Relationship memory</dt><dd>local-only counters</dd>
+          <dt>Content collection</dt><dd>disabled</dd>
+          <dt>Network upload</dt><dd>disabled</dd>
+        </dl>
+      </section>
+      <p id="save-status" class="save-status" role="status">Settings are saved locally.</p>
+    </main>
+    <script src="renderer.js"></script>
+  </body>
+</html>

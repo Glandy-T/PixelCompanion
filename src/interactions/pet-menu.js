@@ -13,6 +13,7 @@ function buildPetMenuTemplate(options = {}) {
     },
     { type: 'separator' },
     { label: 'Open ChatGPT', click: options.onOpenChatGPT },
+    { label: 'Settings...', click: options.onOpenSettings },
     {
       label: 'Always on Top',
       type: 'checkbox',

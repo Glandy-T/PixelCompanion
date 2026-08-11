@@ -17,6 +17,7 @@ const { buildTrayMenuTemplate } = require('./lifecycle/tray-menu');
 const { WINDOW_PREFERENCES_FILE, WindowPreferencesStore, resolveWindowPosition } = require('./lifecycle/window-preferences');
 const { RELATIONSHIP_STATE_UPDATED, RelationshipManager } = require('./relationship/relationship-manager');
 const { RELATIONSHIP_STATE_FILE, RelationshipStore } = require('./relationship/relationship-store');
+const { APP_SETTINGS_FILE, AppSettingsStore, normalizeAppSettings } = require('./settings/app-settings');
 
 let petWindow;
 let debugWindow;
@@ -34,6 +35,9 @@ let tray = null;
 let windowPreferences = null;
 let windowPositionTimer = null;
 let relationshipManager = null;
+let settingsWindow = null;
+let appSettingsStore = null;
+let appSettings = normalizeAppSettings();
 
 function getPetWindow(webContents) {
   const window = BrowserWindow.fromWebContents(webContents);
@@ -70,6 +74,7 @@ function showPetMenu(window) {
     launchAtLoginAvailable: app.isPackaged,
     launchAtLogin: loginSettings.openAtLogin,
     onToggleLaunchAtLogin: (item) => setLaunchAtLogin(Boolean(item.checked)),
+    onOpenSettings: () => createSettingsWindow(),
     onHide: () => hidePetWindow(),
     onToggleDebug: () => toggleDebugWindow(),
     onQuit: () => app.quit()
@@ -102,10 +107,71 @@ function updateTrayMenu() {
     debugEnabled: !app.isPackaged,
     onTogglePet: () => togglePetWindow(),
     onToggleAlwaysOnTop: (item) => setPetAlwaysOnTop(Boolean(item.checked)),
+    onOpenSettings: () => createSettingsWindow(),
     onToggleLaunchAtLogin: (item) => setLaunchAtLogin(Boolean(item.checked)),
     onToggleDebug: () => toggleDebugWindow(),
     onQuit: () => app.quit()
   })));
+}
+
+function getSettingsSnapshot() {
+  const loginSettings = app.getLoginItemSettings();
+  return {
+    ...appSettings,
+    alwaysOnTop: Boolean(petWindow && !petWindow.isDestroyed() && petWindow.isAlwaysOnTop()),
+    launchAtLoginAvailable: app.isPackaged,
+    launchAtLogin: loginSettings.openAtLogin,
+    characterSource: characterRendererProfile.source,
+    persistence: 'local-only',
+    networkUpload: false
+  };
+}
+
+function publishSettings() {
+  const snapshot = getSettingsSnapshot();
+  if (petWindow && !petWindow.isDestroyed()) {
+    petWindow.webContents.send('settings:state-changed', snapshot);
+  }
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.webContents.send('settings:state-changed', snapshot);
+  }
+  updateTrayMenu();
+  return snapshot;
+}
+
+function updateAppSettings(values = {}) {
+  appSettings = appSettingsStore?.save({ ...appSettings, ...values }) ?? normalizeAppSettings({ ...appSettings, ...values });
+  ecologyEngine?.setPaused(!appSettings.proactiveEcologyEnabled);
+  return publishSettings();
+}
+
+function createSettingsWindow() {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.focus();
+    return;
+  }
+  settingsWindow = new BrowserWindow({
+    width: 460,
+    height: 560,
+    minWidth: 400,
+    minHeight: 500,
+    title: 'Pixel Companion Settings',
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'settings', 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+  settingsWindow.setMenuBarVisibility(false);
+  settingsWindow.loadFile(path.join(__dirname, 'settings', 'index.html'));
+  settingsWindow.once('ready-to-show', () => {
+    settingsWindow?.show();
+    publishSettings();
+  });
+  settingsWindow.on('closed', () => {
+    settingsWindow = null;
+  });
 }
 
 function createTray() {
@@ -158,6 +224,7 @@ function setPetAlwaysOnTop(enabled) {
     persistWindowPreferences(petWindow);
   }
   updateTrayMenu();
+  publishSettings();
 }
 
 function setLaunchAtLogin(enabled) {
@@ -165,6 +232,7 @@ function setLaunchAtLogin(enabled) {
     app.setLoginItemSettings({ openAtLogin: enabled });
   }
   updateTrayMenu();
+  publishSettings();
 }
 
 function handlePetInteraction(window, action, options = {}) {
@@ -258,6 +326,7 @@ function createBehaviorRuntime(window) {
   });
 
   engine.start();
+  engine.setPaused(!appSettings.proactiveEcologyEnabled);
   return { engine, eventBus };
 }
 
@@ -389,6 +458,9 @@ function createWindow() {
       if (debugWindow && !debugWindow.isDestroyed()) {
         debugWindow.close();
       }
+      if (settingsWindow && !settingsWindow.isDestroyed()) {
+        settingsWindow.close();
+      }
     }
   });
 }
@@ -459,6 +531,22 @@ ipcMain.handle('environment:get-state', () => sensorManager?.getSnapshot() ?? nu
 ipcMain.handle('bridge:get-state', () => bridgeManager?.getSnapshot() ?? null);
 ipcMain.handle('ecology:get-state', () => ecologyEngine?.getSnapshot() ?? null);
 ipcMain.handle('relationship:get-state', () => relationshipManager?.getSnapshot() ?? null);
+ipcMain.handle('settings:get', () => getSettingsSnapshot());
+ipcMain.handle('settings:update', (event, values) => {
+  if (event.sender !== settingsWindow?.webContents || !values || typeof values !== 'object') {
+    return getSettingsSnapshot();
+  }
+  if (typeof values.alwaysOnTop === 'boolean') {
+    setPetAlwaysOnTop(values.alwaysOnTop);
+  }
+  if (typeof values.launchAtLogin === 'boolean') {
+    setLaunchAtLogin(values.launchAtLogin);
+  }
+  return updateAppSettings({
+    ...(typeof values.quickActionsEnabled === 'boolean' ? { quickActionsEnabled: values.quickActionsEnabled } : {}),
+    ...(typeof values.proactiveEcologyEnabled === 'boolean' ? { proactiveEcologyEnabled: values.proactiveEcologyEnabled } : {})
+  });
+});
 ipcMain.handle('character:get-renderer-profile', (event) => {
   return getPetWindow(event.sender) === petWindow ? characterRendererProfile : getPublicPlaceholderProfile();
 });
@@ -515,6 +603,10 @@ app.whenReady().then(() => {
   windowPreferences = new WindowPreferencesStore({
     filePath: path.join(app.getPath('userData'), WINDOW_PREFERENCES_FILE)
   });
+  appSettingsStore = new AppSettingsStore({
+    filePath: path.join(app.getPath('userData'), APP_SETTINGS_FILE)
+  });
+  appSettings = appSettingsStore.load();
   createWindow();
   createTray();
 
