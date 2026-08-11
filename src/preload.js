@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('pet', {
   moveDrag: (point) => ipcRenderer.send('pet:drag-move', point),
   endDrag: () => ipcRenderer.send('pet:drag-end'),
   showMenu: () => ipcRenderer.send('pet:show-menu'),
+  interact: (action) => ipcRenderer.invoke('pet:interact', action),
   recordEcologyInteraction: (kind) => ipcRenderer.send('ecology:interaction', kind),
   getCharacterProfile: () => ipcRenderer.invoke('character:get-renderer-profile'),
   getBehaviorState: () => ipcRenderer.invoke('behavior:get-state'),
@@ -20,5 +21,8 @@ contextBridge.exposeInMainWorld('pet', {
   },
   onEcologyBubble: (listener) => {
     ipcRenderer.on('ecology:local-bubble', (_event, message) => listener(message));
+  },
+  onInteractionResponse: (listener) => {
+    ipcRenderer.on('pet:interaction-response', (_event, reaction) => listener(reaction));
   }
 });

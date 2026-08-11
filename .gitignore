@@ -33,6 +33,8 @@ private/
 design/local/
 design/private/
 private-design/
+docs/*-character-bible.md
+docs/*-desktop-behavior-spec.md
 *.private.psd
 *.private.aseprite
 *.private.clip

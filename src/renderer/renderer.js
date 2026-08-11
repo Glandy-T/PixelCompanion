@@ -1,5 +1,6 @@
 const petCharacter = document.querySelector('#pet-character');
 const characterImage = document.querySelector('#character-image');
+const quickActions = document.querySelector('#quick-actions');
 const speechBubble = document.querySelector('#speech-bubble');
 const notice = document.querySelector('#notice');
 const petWindow = document.querySelector('.pet-window');
@@ -15,6 +16,7 @@ let suppressClickUntil = 0;
 let lastBubbleMessage = '';
 let lastBubbleAt = 0;
 let lastAnimationReportAt = 0;
+let quickActionsTimer = null;
 
 const animationController = new window.PixelCompanionAnimationController.AnimationController();
 const animationPlayer = new window.PixelCompanionAnimationPlayer.AnimationPlayer({
@@ -34,6 +36,20 @@ function setInteractive(isInteractive) {
 
   isPointerOverCharacter = isInteractive;
   window.pet.setInteractive(isInteractive);
+}
+
+function showQuickActions() {
+  window.clearTimeout(quickActionsTimer);
+  quickActions.classList.add('is-visible');
+  quickActions.setAttribute('aria-hidden', 'false');
+}
+
+function scheduleQuickActionsHide() {
+  window.clearTimeout(quickActionsTimer);
+  quickActionsTimer = window.setTimeout(() => {
+    quickActions.classList.remove('is-visible');
+    quickActions.setAttribute('aria-hidden', 'true');
+  }, 260);
 }
 
 function showNotice(message) {
@@ -126,7 +142,14 @@ function animationLoop(now) {
 
 function updateInteractiveTarget(event) {
   const target = document.elementFromPoint(event.clientX, event.clientY);
-  setInteractive(petCharacter.contains(target));
+  const overCharacter = petCharacter.contains(target);
+  const overQuickActions = quickActions.contains(target);
+  setInteractive(overCharacter || overQuickActions);
+  if (overCharacter || overQuickActions) {
+    showQuickActions();
+  } else {
+    scheduleQuickActionsHide();
+  }
 }
 
 document.addEventListener('mousemove', updateInteractiveTarget);
@@ -209,8 +232,32 @@ petCharacter.addEventListener('contextmenu', (event) => {
   window.pet.showMenu();
 });
 
+quickActions.addEventListener('pointerenter', showQuickActions);
+quickActions.addEventListener('pointerleave', scheduleQuickActionsHide);
+quickActions.addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-pet-action]');
+  if (!button) {
+    return;
+  }
+
+  if (button.dataset.petAction === 'more') {
+    window.pet.showMenu();
+    return;
+  }
+
+  const reaction = await window.pet.interact(button.dataset.petAction);
+  if (reaction?.message) {
+    showSpeechBubble(reaction.message, 2200, { force: true });
+  }
+});
+
 window.pet.onNotice(showNotice);
 window.pet.onEcologyBubble((message) => showSpeechBubble(message, 2600));
+window.pet.onInteractionResponse((reaction) => {
+  if (reaction?.message) {
+    showSpeechBubble(reaction.message, 2200, { force: true });
+  }
+});
 window.pet.onBehaviorState(applyBehaviorState);
 window.pet.getCharacterProfile().then(applyCharacterProfile);
 window.pet.getBehaviorState().then(applyBehaviorState);

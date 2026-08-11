@@ -11,6 +11,8 @@ const { BridgeBehaviorIntegration } = require('./bridges/bridge-behavior-integra
 const { ECOLOGY_LOCAL_BUBBLE, ECOLOGY_STATE_UPDATED, EcologyEngine } = require('./ecology/ecology-engine');
 const { loadPrivatePersonalityConfig } = require('./local-data/private-data-loader');
 const { createPrivateCharacterRendererProfile, getPublicPlaceholderProfile } = require('./local-data/private-character-adapter');
+const { chooseLocalReaction } = require('./interactions/personality-reactions');
+const { buildPetMenuTemplate } = require('./interactions/pet-menu');
 
 let petWindow;
 let debugWindow;
@@ -44,43 +46,38 @@ function isScreenPoint(point) {
 }
 
 function showPetMenu(window) {
-  const items = [
-    {
-      label: 'Open ChatGPT',
-      click: () => {
-        window.webContents.send(
-          'pet:notice',
-          'Open ChatGPT is a placeholder: desktop app focus is not configured yet.'
-        );
-      }
+  const menu = Menu.buildFromTemplate(buildPetMenuTemplate({
+    currentState: behaviorEngine?.getSnapshot().state ?? 'idle',
+    alwaysOnTop: window.isAlwaysOnTop(),
+    debugEnabled: !app.isPackaged,
+    onInteraction: (action) => handlePetInteraction(window, action),
+    onOpenChatGPT: () => {
+      window.webContents.send(
+        'pet:notice',
+        'Open ChatGPT is a placeholder: desktop app focus is not configured yet.'
+      );
     },
-    {
-      label: 'Hide Pet',
-      click: () => window.hide()
-    }
-  ];
-
-  if (!app.isPackaged) {
-    items.push(
-      { type: 'separator' },
-      {
-        label: 'Toggle Debug Window',
-        click: () => toggleDebugWindow()
-      }
-    );
-  }
-
-  items.push(
-    { type: 'separator' },
-    {
-      label: 'Quit',
-      click: () => app.quit()
-    }
-  );
-
-  const menu = Menu.buildFromTemplate(items);
+    onToggleAlwaysOnTop: (item) => window.setAlwaysOnTop(Boolean(item.checked)),
+    onHide: () => window.hide(),
+    onToggleDebug: () => toggleDebugWindow(),
+    onQuit: () => app.quit()
+  }));
 
   menu.popup({ window });
+}
+
+function handlePetInteraction(window, action, options = {}) {
+  if (!window || window.isDestroyed() || !['pat', 'hello', 'surprise'].includes(action)) {
+    return null;
+  }
+
+  const traits = ecologyEngine?.getSnapshot().personality?.traits ?? {};
+  const reaction = chooseLocalReaction(action, traits);
+  ecologyEngine?.recordInteraction(`quick:${action}`);
+  if (options.notifyRenderer !== false) {
+    window.webContents.send('pet:interaction-response', reaction);
+  }
+  return reaction;
 }
 
 function sendToDebugWindow(channel, payload) {
@@ -336,6 +333,10 @@ ipcMain.handle('bridge:get-state', () => bridgeManager?.getSnapshot() ?? null);
 ipcMain.handle('ecology:get-state', () => ecologyEngine?.getSnapshot() ?? null);
 ipcMain.handle('character:get-renderer-profile', (event) => {
   return getPetWindow(event.sender) === petWindow ? characterRendererProfile : getPublicPlaceholderProfile();
+});
+ipcMain.handle('pet:interact', (event, action) => {
+  const window = getPetWindow(event.sender);
+  return window === petWindow ? handlePetInteraction(window, action, { notifyRenderer: false }) : null;
 });
 
 ipcMain.handle('bridge:set-sqlite-enabled', (event, enabled) => {
