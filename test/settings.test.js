@@ -38,3 +38,11 @@ test('settings window exposes privacy facts and required local controls', () => 
   assert.match(html, /Content collection<\/dt><dd>disabled/);
   assert.match(html, /Network upload<\/dt><dd>disabled/);
 });
+
+test('proactive setting is applied to EcologyEngine rather than BehaviorEngine', () => {
+  const mainSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'main.js'), 'utf8');
+  const behaviorRuntime = mainSource.match(/function createBehaviorRuntime[\s\S]*?function createEnvironmentRuntime/)[0];
+  const ecologyRuntime = mainSource.match(/function createEcologyRuntime[\s\S]*?function createRelationshipRuntime/)[0];
+  assert.doesNotMatch(behaviorRuntime, /setPaused/);
+  assert.match(ecologyRuntime, /engine\.setPaused\(!appSettings\.proactiveEcologyEnabled\)/);
+});

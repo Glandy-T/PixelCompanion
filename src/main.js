@@ -326,7 +326,6 @@ function createBehaviorRuntime(window) {
   });
 
   engine.start();
-  engine.setPaused(!appSettings.proactiveEcologyEnabled);
   return { engine, eventBus };
 }
 
@@ -376,6 +375,7 @@ function createEcologyRuntime(eventBus) {
     }
   });
   engine.start();
+  engine.setPaused(!appSettings.proactiveEcologyEnabled);
   return engine;
 }
 
