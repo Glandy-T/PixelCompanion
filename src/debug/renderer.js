@@ -6,6 +6,7 @@ const animationFrame = document.querySelector('#animation-frame');
 const animationTransition = document.querySelector('#animation-transition');
 const animationBubble = document.querySelector('#animation-bubble');
 const animationSpeed = document.querySelector('#animation-speed');
+const animationAssetSource = document.querySelector('#animation-asset-source');
 const environmentApp = document.querySelector('#environment-app');
 const environmentCategory = document.querySelector('#environment-category');
 const environmentDuration = document.querySelector('#environment-duration');
@@ -80,6 +81,7 @@ function applyAnimationState(snapshot) {
     : 'settled';
   animationBubble.textContent = snapshot.bubble || '...';
   animationSpeed.textContent = `${snapshot.speed ?? 1}x`;
+  animationAssetSource.textContent = snapshot.assetSource ?? 'placeholder';
 }
 
 function applyEnvironmentState(snapshot) {

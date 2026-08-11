@@ -24,6 +24,7 @@ const animationPlayer = new window.PixelCompanionAnimationPlayer.AnimationPlayer
   motion: petMotion,
   indicator: stateIndicator
 });
+const privateFramePlayer = new window.PixelCompanionPrivateFramePlayer.PrivateFramePlayer({ image: characterImage });
 
 function toScreenPoint(event) {
   return { screenX: event.screenX, screenY: event.screenY };
@@ -90,6 +91,7 @@ function applyCharacterProfile(profile) {
   const candidate = new Image();
   candidate.onload = () => {
     characterImage.src = profile.imageUrl;
+    privateFramePlayer.setProfile(profile);
     characterImage.alt = 'Local pixel character';
     petCharacter.setAttribute('aria-label', 'Local pixel character');
   };
@@ -110,7 +112,7 @@ function applyBehaviorState(snapshot) {
   showSpeechBubble(bubbleText, Math.min(snapshot.durationMs ?? 2200, 2400));
 }
 
-function reportAnimationState(snapshot) {
+function reportAnimationState(snapshot, privateFrame) {
   const now = Date.now();
   if (now - lastAnimationReportAt < 100) {
     return;
@@ -119,19 +121,21 @@ function reportAnimationState(snapshot) {
   lastAnimationReportAt = now;
   window.pet.reportAnimationState({
     animation: snapshot.animation?.id ?? 'idle',
-    frame: snapshot.frame ?? 0,
+    frame: privateFrame?.frameIndex ?? snapshot.frame ?? 0,
     phase: snapshot.phase ?? 'rest',
     transition: snapshot.transition
       ? { from: snapshot.transition.from, to: snapshot.transition.to }
       : null,
     bubble: snapshot.animation?.bubbleText ?? '',
-    speed: snapshot.speed ?? 1
+    speed: snapshot.speed ?? 1,
+    assetSource: privateFrame?.source ?? 'placeholder'
   });
 }
 
 function renderAnimation(snapshot) {
-  if (animationPlayer.apply(snapshot)) {
-    reportAnimationState(snapshot);
+  const privateFrame = privateFramePlayer.apply(snapshot);
+  if (animationPlayer.apply(snapshot) || privateFrame.changed) {
+    reportAnimationState(snapshot, privateFrame);
   }
 }
 

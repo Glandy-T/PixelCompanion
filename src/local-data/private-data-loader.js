@@ -77,11 +77,21 @@ function isSafeRelativeAssetPath(assetPath) {
 
 function loadPrivateCharacterManifest(options = {}) {
   const result = readPrivateJson(PRIVATE_CHARACTER_MANIFEST_FILE, options);
-  if (!result.loaded || !isPlainObject(result.value?.assets)) {
+  const hasAssets = isPlainObject(result.value?.assets);
+  const hasAnimations = isPlainObject(result.value?.animations);
+  if (!result.loaded || (!hasAssets && !hasAnimations)) {
     return { loaded: false, manifest: null, reason: result.loaded ? 'invalid-schema' : result.reason };
   }
 
-  return { loaded: true, manifest: { assets: { ...result.value.assets } }, reason: null };
+  return {
+    loaded: true,
+    manifest: {
+      version: Number.isInteger(result.value.version) ? result.value.version : 1,
+      assets: hasAssets ? { ...result.value.assets } : {},
+      animations: hasAnimations ? { ...result.value.animations } : {}
+    },
+    reason: null
+  };
 }
 
 function resolvePrivateCharacterAsset(assetKey, options = {}) {
