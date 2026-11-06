@@ -7,14 +7,14 @@ function listWindowsProcessNames() {
     return Promise.resolve([]);
   }
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     execFile('tasklist.exe', ['/FO', 'CSV', '/NH'], {
       windowsHide: true,
       timeout: 2500,
       maxBuffer: 1024 * 1024
     }, (error, stdout) => {
       if (error) {
-        resolve([]);
+        reject(new Error('process-list-unavailable'));
         return;
       }
 

@@ -89,6 +89,17 @@ test('Codex process bridge handles missing processes without emitting false tran
   assert.deepEqual(events, []);
 });
 
+test('failed process polling preserves last presence and reports degraded health', async () => {
+  const events = [];
+  const bridge = new ChatGPTProcessBridge({ emit: type => events.push(type),
+    getProcessNames: async () => { throw new Error('unavailable'); } });
+  bridge.observeProcessNames(['ChatGPT.exe']);
+  await bridge.poll();
+  assert.equal(bridge.health().healthy, false);
+  assert.equal(bridge.getSnapshot().present, true);
+  assert.deepEqual(events, [AI_BRIDGE_EVENTS.CHATGPT_STARTED]);
+});
+
 test('SQLite observer falls back safely when its database is missing', () => {
   const observer = new CodexSqliteObserver({
     enabled: true,
@@ -218,4 +229,32 @@ test('bridge manager selects process-only, process-plus-sqlite, and unavailable 
     sqliteObserver: createBridgeFake(healthySqlite)
   });
   assert.equal(unavailableManager.currentMode(), 'unavailable');
+});
+
+test('SQLite observer discovers status-only schemas and counts rows rather than status groups', () => {
+  const { DatabaseSync } = require('node:sqlite');
+  const db = new DatabaseSync(':memory:');
+  db.exec('CREATE TABLE agent_jobs(status TEXT); CREATE TABLE agent_job_items(status TEXT);');
+  db.exec("INSERT INTO agent_jobs VALUES ('sample'),('sample'); INSERT INTO agent_job_items VALUES ('unknown');");
+  const observer = new CodexSqliteObserver({ enabled: true, resolveDatabasePath: () => 'fixture',
+    fileExists: () => true, openDatabase: () => ({ prepare: sql => db.prepare(sql), close() {} }) });
+  try {
+    const snapshot = observer.observe();
+    assert.equal(snapshot.schemaHealth, 'healthy');
+    assert.equal(snapshot.validation.agentJobsRowCount, 2);
+    assert.equal(snapshot.validation.agentJobItemsRowCount, 1);
+    assert.equal(snapshot.rawUnknownStatus, 'unknown');
+    db.exec('DELETE FROM agent_job_items; DELETE FROM agent_jobs;');
+    observer.observe();
+    assert.equal(observer.rowsByKey.size, 0);
+  } finally { db.close(); }
+});
+
+test('SQLite close failure degrades health rather than escaping the polling callback', () => {
+  const db = createFakeDatabase();
+  db.close = () => { throw new Error('closed unexpectedly'); };
+  const observer = new CodexSqliteObserver({ enabled: true, resolveDatabasePath: () => 'fixture',
+    fileExists: () => true, openDatabase: () => db });
+  assert.doesNotThrow(() => observer.observe());
+  assert.equal(observer.getSnapshot().lastError, 'sqlite-close-unavailable');
 });

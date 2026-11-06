@@ -136,7 +136,7 @@ class CodexSqliteObserver {
     } catch {
       this.setFallback('sqlite-read-unavailable');
     } finally {
-      database?.close?.();
+      try { database?.close?.(); } catch { this.setFallback('sqlite-close-unavailable'); }
       this.onUpdate(this.getSnapshot());
     }
 
@@ -170,13 +170,18 @@ class CodexSqliteObserver {
     }
 
     const usesRowIdentity = selectedColumns.includes('id');
+    const aggregates = ['status', 'COUNT(*) AS status_count', ...['updated_at', 'created_at']
+      .filter((column) => selectedColumns.includes(column))
+      .map((column) => `MAX(${column}) AS ${column}`)];
     const rows = usesRowIdentity
       ? database.prepare(`SELECT ${selectedColumns.join(', ')} FROM ${tableName}`).all()
       : database.prepare(
-        `SELECT status, COUNT(*) AS status_count, MAX(updated_at) AS updated_at, MAX(created_at) AS created_at FROM ${tableName} GROUP BY status`
+        `SELECT ${aggregates.join(', ')} FROM ${tableName} GROUP BY status`
       ).all();
+    const currentKeys = new Set();
     for (const row of rows) {
       const rowKey = usesRowIdentity ? `${tableName}:${String(row.id)}` : `${tableName}:${String(row.status)}`;
+      currentKeys.add(rowKey);
       const status = sanitizeStatus(row.status);
       const fingerprint = `${status}:${row.status_count ?? ''}:${row.updated_at ?? row.created_at ?? ''}`;
       if (this.rowsByKey.get(rowKey) === fingerprint) {
@@ -191,7 +196,10 @@ class CodexSqliteObserver {
       this.emit(AI_BRIDGE_EVENTS.CODEX_JOB_UNKNOWN, { table: tableName });
     }
 
-    return rows.length;
+    for (const key of this.rowsByKey.keys()) {
+      if (key.startsWith(`${tableName}:`) && !currentKeys.has(key)) this.rowsByKey.delete(key);
+    }
+    return usesRowIdentity ? rows.length : rows.reduce((total, row) => total + Number(row.status_count ?? 0), 0);
   }
 
   updateValidation(databasePath, agentJobsRowCount, agentJobItemsRowCount) {

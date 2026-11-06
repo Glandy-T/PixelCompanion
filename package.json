@@ -4,7 +4,10 @@
   "description": "A minimal Windows desktop pixel companion.",
   "main": "src/main.js",
   "scripts": {
+    "prestart": "node node_modules/electron/install.js",
     "start": "electron .",
+    "prestart:3d": "node node_modules/electron/install.js",
+    "start:3d": "electron . --3d",
     "test": "node --test test/*.test.js",
     "pack": "electron-builder --dir",
     "dist": "electron-builder --win portable"
@@ -17,8 +20,8 @@
   "author": "",
   "license": "UNLICENSED",
   "devDependencies": {
-    "electron": "^43.1.0",
-    "electron-builder": "^26.15.3"
+    "electron": "^43.8.7",
+    "electron-builder": "^26.18.0"
   },
   "build": {
     "appId": "io.github.pixelcompanion.desktop",
@@ -38,5 +41,14 @@
       ],
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     }
+  },
+  "dependencies": {
+    "three": "0.187.0"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "overrides": {
+    "minimatch@>=7 <11.0.1": "11.0.5"
   }
 }

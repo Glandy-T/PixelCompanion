@@ -6,6 +6,9 @@ const notice = document.querySelector('#notice');
 const petWindow = document.querySelector('.pet-window');
 const petMotion = document.querySelector('#pet-motion');
 const stateIndicator = document.querySelector('#state-indicator');
+const threeCanvas = document.querySelector('#character-3d');
+let threePlayer = null;
+const wantsThree = new URLSearchParams(window.location.search).get('renderer') === '3d';
 
 let isPointerOverCharacter = false;
 let dragState = null;
@@ -97,6 +100,7 @@ function showSpeechBubble(message = 'Hello, Glandy.', durationMs = 2600, options
 }
 
 function applyCharacterProfile(profile) {
+  if (wantsThree) return;
   if (profile?.source !== 'private' || typeof profile.imageUrl !== 'string') {
     return;
   }
@@ -146,6 +150,13 @@ function reportAnimationState(snapshot, privateFrame) {
 }
 
 function renderAnimation(snapshot) {
+  if (threePlayer) {
+    threePlayer.setState(snapshot.animation.id, { speed: snapshot.speed });
+    const motion = threePlayer.tick(performance.now());
+    animationPlayer.apply(snapshot);
+    reportAnimationState({ ...snapshot, phase: motion.phase }, { source: 'placeholder-3d', frameIndex: 0 });
+    return;
+  }
   const privateFrame = privateFramePlayer.apply(snapshot);
   if (animationPlayer.apply(snapshot) || privateFrame.changed) {
     reportAnimationState(snapshot, privateFrame);
@@ -158,8 +169,9 @@ function animationLoop(now) {
 }
 
 function updateInteractiveTarget(event) {
+  if (dragState) { setInteractive(true); return; }
   const target = document.elementFromPoint(event.clientX, event.clientY);
-  const overCharacter = petCharacter.contains(target);
+  const overCharacter = petCharacter.contains(target) && hitsCharacter(event);
   const overQuickActions = quickActions.contains(target);
   setInteractive(overCharacter || overQuickActions);
   if (overCharacter || overQuickActions) {
@@ -167,6 +179,10 @@ function updateInteractiveTarget(event) {
   } else {
     scheduleQuickActionsHide();
   }
+}
+
+function hitsCharacter(event) {
+  return !threePlayer || threePlayer.hitTest(event.clientX, event.clientY);
 }
 
 document.addEventListener('mousemove', updateInteractiveTarget);
@@ -197,7 +213,7 @@ document.addEventListener('pointermove', (event) => {
 });
 
 petCharacter.addEventListener('pointerdown', (event) => {
-  if (event.button !== 0) {
+  if (event.button !== 0 || !hitsCharacter(event)) {
     return;
   }
 
@@ -229,8 +245,8 @@ petCharacter.addEventListener('pointercancel', () => {
   window.pet.endDrag();
 });
 
-petCharacter.addEventListener('click', () => {
-  if (Date.now() < suppressClickUntil) {
+petCharacter.addEventListener('click', (event) => {
+  if ((event.detail !== 0 && !hitsCharacter(event)) || Date.now() < suppressClickUntil) {
     return;
   }
 
@@ -238,7 +254,8 @@ petCharacter.addEventListener('click', () => {
   singleClickTimer = window.setTimeout(showClickFeedback, 220);
 });
 
-petCharacter.addEventListener('dblclick', () => {
+petCharacter.addEventListener('dblclick', (event) => {
+  if (!hitsCharacter(event)) return;
   window.clearTimeout(singleClickTimer);
   window.pet.recordEcologyInteraction('double-click');
   showSpeechBubble('Hello, Glandy.', 2600, { force: true });
@@ -246,6 +263,7 @@ petCharacter.addEventListener('dblclick', () => {
 
 petCharacter.addEventListener('contextmenu', (event) => {
   event.preventDefault();
+  if (!hitsCharacter(event)) return;
   window.pet.showMenu();
 });
 
@@ -281,3 +299,30 @@ window.pet.getCharacterProfile().then(applyCharacterProfile);
 window.pet.getUiSettings().then(applyUiSettings);
 window.pet.getBehaviorState().then(applyBehaviorState);
 window.requestAnimationFrame(animationLoop);
+
+function restoreImageFallback(reason) {
+  threePlayer?.dispose();
+  threePlayer = null;
+  threeCanvas.hidden = true;
+  characterImage.hidden = false;
+  petCharacter.classList.remove('is-3d');
+  petWindow.dataset.renderer = '2d-fallback';
+  petWindow.dataset.rendererError = reason;
+}
+
+if (wantsThree) {
+  import('../animation/three-placeholder.mjs').then(({ createThreePlaceholder }) => {
+    threeCanvas.hidden = false;
+    petCharacter.classList.add('is-3d');
+    threePlayer = createThreePlaceholder({ canvas: threeCanvas, onFailure: restoreImageFallback });
+    characterImage.hidden = true;
+    petWindow.dataset.renderer = '3d';
+    petCharacter.setAttribute('aria-label', '几何体 3D 占位角色');
+  }).catch(error => {
+    console.warn('3D placeholder unavailable; using public image fallback.', error);
+    restoreImageFallback('3d-initialization-failed');
+  });
+} else {
+  petWindow.dataset.renderer = '2d';
+}
+window.addEventListener('beforeunload', () => threePlayer?.dispose());

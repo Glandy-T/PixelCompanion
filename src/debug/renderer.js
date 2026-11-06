@@ -199,7 +199,7 @@ function applyRelationshipState(snapshot) {
   relationshipContent.textContent = snapshot.storesContent ? 'yes' : 'no';
 }
 
-document.querySelector('.debug-actions').addEventListener('click', (event) => {
+document.querySelector('#actions-title').parentElement.querySelector('.debug-actions').addEventListener('click', (event) => {
   const button = event.target.closest('[data-behavior]');
   if (button) {
     window.debug.requestBehavior(button.dataset.behavior);

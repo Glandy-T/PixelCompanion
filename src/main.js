@@ -18,6 +18,7 @@ const { WINDOW_PREFERENCES_FILE, WindowPreferencesStore, resolveWindowPosition }
 const { RELATIONSHIP_STATE_UPDATED, RelationshipManager } = require('./relationship/relationship-manager');
 const { RELATIONSHIP_STATE_FILE, RelationshipStore } = require('./relationship/relationship-store');
 const { APP_SETTINGS_FILE, AppSettingsStore, normalizeAppSettings } = require('./settings/app-settings');
+const { isTrustedSender, protectWindow } = require('./security/window-policy');
 
 let petWindow;
 let debugWindow;
@@ -39,9 +40,13 @@ let settingsWindow = null;
 let appSettingsStore = null;
 let appSettings = normalizeAppSettings();
 
-function getPetWindow(webContents) {
-  const window = BrowserWindow.fromWebContents(webContents);
-  return window && !window.isDestroyed() ? window : null;
+function trustedRole(event, role) {
+  const window = role === 'renderer' ? petWindow : role === 'debug' ? debugWindow : settingsWindow;
+  return isTrustedSender(event, window, path.join(__dirname, role, 'index.html'));
+}
+
+function trustedPetWindow(event) {
+  return trustedRole(event, 'renderer') ? petWindow : null;
 }
 
 function setMousePassthrough(window, shouldIgnore) {
@@ -160,9 +165,11 @@ function createSettingsWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'settings', 'preload.js'),
       contextIsolation: true,
+      sandbox: true,
       nodeIntegration: false
     }
   });
+  protectWindow(settingsWindow);
   settingsWindow.setMenuBarVisibility(false);
   settingsWindow.loadFile(path.join(__dirname, 'settings', 'index.html'));
   settingsWindow.once('ready-to-show', () => {
@@ -285,10 +292,12 @@ function createDebugWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'debug', 'preload.js'),
       contextIsolation: true,
+      sandbox: true,
       nodeIntegration: false
     }
   });
 
+  protectWindow(debugWindow);
   debugWindow.setMenuBarVisibility(false);
   debugWindow.loadFile(path.join(__dirname, 'debug', 'index.html'));
   debugWindow.once('ready-to-show', () => {
@@ -407,11 +416,15 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
+      sandbox: true,
       nodeIntegration: false
     }
   });
 
   petWindow = window;
+  protectWindow(window);
+  window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+  window.webContents.session.setPermissionCheckHandler(() => false);
   characterRendererProfile = createPrivateCharacterRendererProfile({ repositoryRoot: app.getAppPath() });
   const behaviorRuntime = createBehaviorRuntime(window);
   behaviorEngine = behaviorRuntime.engine;
@@ -423,7 +436,9 @@ function createWindow() {
   ecologyEngine = createEcologyRuntime(environmentEventBus);
   relationshipManager = createRelationshipRuntime(environmentEventBus);
   window.setMenuBarVisibility(false);
-  window.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  window.loadFile(path.join(__dirname, 'renderer', 'index.html'), {
+    query: { renderer: process.argv.includes('--3d') ? '3d' : '2d' }
+  });
   window.once('ready-to-show', () => {
     setMousePassthrough(window, true);
     window.show();
@@ -466,14 +481,14 @@ function createWindow() {
 }
 
 ipcMain.on('pet:set-interactive', (event, isInteractive) => {
-  const window = getPetWindow(event.sender);
+  const window = trustedPetWindow(event);
   if (window) {
     setMousePassthrough(window, !Boolean(isInteractive));
   }
 });
 
 ipcMain.on('pet:drag-start', (event, point) => {
-  const window = getPetWindow(event.sender);
+  const window = trustedPetWindow(event);
   if (!window || !isScreenPoint(point)) {
     return;
   }
@@ -488,7 +503,7 @@ ipcMain.on('pet:drag-start', (event, point) => {
 });
 
 ipcMain.on('pet:drag-move', (event, point) => {
-  const window = getPetWindow(event.sender);
+  const window = trustedPetWindow(event);
   if (!window || dragOffset?.window !== window || !isScreenPoint(point)) {
     return;
   }
@@ -500,21 +515,21 @@ ipcMain.on('pet:drag-move', (event, point) => {
 });
 
 ipcMain.on('pet:drag-end', (event) => {
-  const window = getPetWindow(event.sender);
+  const window = trustedPetWindow(event);
   if (dragOffset?.window === window) {
     dragOffset = null;
   }
 });
 
 ipcMain.on('pet:show-menu', (event) => {
-  const window = getPetWindow(event.sender);
+  const window = trustedPetWindow(event);
   if (window) {
     showPetMenu(window);
   }
 });
 
 ipcMain.on('pet:animation-state', (event, snapshot) => {
-  if (getPetWindow(event.sender) !== petWindow || !snapshot || typeof snapshot !== 'object') {
+  if (!trustedPetWindow(event) || !snapshot || typeof snapshot !== 'object') {
     return;
   }
 
@@ -522,19 +537,19 @@ ipcMain.on('pet:animation-state', (event, snapshot) => {
   sendToDebugWindow('animation:state-changed', latestAnimationSnapshot);
 });
 
-ipcMain.handle('app:get-runtime-config', () => ({
-  debugEnabled: !app.isPackaged
+ipcMain.handle('app:get-runtime-config', (event) => ({
+  debugEnabled: trustedRole(event, 'debug') && !app.isPackaged
 }));
 
-ipcMain.handle('behavior:get-state', () => behaviorEngine?.getSnapshot() ?? null);
-ipcMain.handle('environment:get-state', () => sensorManager?.getSnapshot() ?? null);
-ipcMain.handle('bridge:get-state', () => bridgeManager?.getSnapshot() ?? null);
-ipcMain.handle('ecology:get-state', () => ecologyEngine?.getSnapshot() ?? null);
-ipcMain.handle('relationship:get-state', () => relationshipManager?.getSnapshot() ?? null);
-ipcMain.handle('settings:get', () => getSettingsSnapshot());
+ipcMain.handle('behavior:get-state', (event) => trustedRole(event, 'renderer') || trustedRole(event, 'debug') ? behaviorEngine?.getSnapshot() ?? null : null);
+ipcMain.handle('environment:get-state', (event) => trustedRole(event, 'debug') ? sensorManager?.getSnapshot() ?? null : null);
+ipcMain.handle('bridge:get-state', (event) => trustedRole(event, 'debug') ? bridgeManager?.getSnapshot() ?? null : null);
+ipcMain.handle('ecology:get-state', (event) => trustedRole(event, 'debug') ? ecologyEngine?.getSnapshot() ?? null : null);
+ipcMain.handle('relationship:get-state', (event) => trustedRole(event, 'debug') ? relationshipManager?.getSnapshot() ?? null : null);
+ipcMain.handle('settings:get', (event) => trustedRole(event, 'renderer') || trustedRole(event, 'settings') ? getSettingsSnapshot() : null);
 ipcMain.handle('settings:update', (event, values) => {
-  if (event.sender !== settingsWindow?.webContents || !values || typeof values !== 'object') {
-    return getSettingsSnapshot();
+  if (!trustedRole(event, 'settings') || !values || typeof values !== 'object') {
+    return null;
   }
   if (typeof values.alwaysOnTop === 'boolean') {
     setPetAlwaysOnTop(values.alwaysOnTop);
@@ -548,31 +563,31 @@ ipcMain.handle('settings:update', (event, values) => {
   });
 });
 ipcMain.handle('character:get-renderer-profile', (event) => {
-  return getPetWindow(event.sender) === petWindow ? characterRendererProfile : getPublicPlaceholderProfile();
+  return trustedPetWindow(event) ? characterRendererProfile : getPublicPlaceholderProfile();
 });
 ipcMain.handle('pet:interact', (event, action) => {
-  const window = getPetWindow(event.sender);
-  return window === petWindow ? handlePetInteraction(window, action, { notifyRenderer: false }) : null;
+  const window = trustedPetWindow(event);
+  return window ? handlePetInteraction(window, action, { notifyRenderer: false }) : null;
 });
 
 ipcMain.handle('bridge:set-sqlite-enabled', (event, enabled) => {
-  if (app.isPackaged || event.sender !== debugWindow?.webContents || !bridgeManager) {
-    return bridgeManager?.getSnapshot() ?? null;
+  if (app.isPackaged || !trustedRole(event, 'debug') || !bridgeManager) {
+    return null;
   }
 
   return bridgeManager.setSqliteObservationEnabled(Boolean(enabled));
 });
 
 ipcMain.on('ecology:interaction', (event, kind) => {
-  if (getPetWindow(event.sender) === petWindow && typeof kind === 'string') {
+  if (trustedPetWindow(event) && ['single-click', 'double-click'].includes(kind)) {
     ecologyEngine?.recordInteraction(kind);
     relationshipManager?.recordInteraction(kind);
   }
 });
 
 ipcMain.handle('ecology:debug-action', (event, action) => {
-  if (app.isPackaged || event.sender !== debugWindow?.webContents || typeof action !== 'string') {
-    return ecologyEngine?.getSnapshot() ?? null;
+  if (app.isPackaged || !trustedRole(event, 'debug') || typeof action !== 'string') {
+    return null;
   }
 
   return ecologyEngine?.debugAction(action) ?? null;
@@ -581,7 +596,7 @@ ipcMain.handle('ecology:debug-action', (event, action) => {
 ipcMain.on('behavior:debug-request', (event, state) => {
   if (
     app.isPackaged ||
-    event.sender !== debugWindow?.webContents ||
+    !trustedRole(event, 'debug') ||
     typeof state !== 'string' ||
     !behaviorEngine
   ) {

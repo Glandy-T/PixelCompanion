@@ -56,6 +56,27 @@ body {
   cursor: grabbing;
 }
 
+.pet-character.is-3d {
+  clip-path: none;
+}
+
+.pet-character.is-3d .pet-motion {
+  transform: none;
+  transition: none;
+}
+
+#character-3d {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+#character-3d[hidden],
+.pixel-character[hidden] {
+  display: none;
+}
+
 .pet-character.is-clicked {
   filter: brightness(1.45);
   transform: scale(1.08);
