@@ -1,6 +1,11 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('debug', {
+  getActivityState: () => ipcRenderer.invoke('activity:get-state'),
+  activityAction: (action) => ipcRenderer.invoke('activity:debug-action', action),
+  onActivityState: (listener) => {
+    ipcRenderer.on('activity:state-changed', (_event, state) => listener(state));
+  },
   getBehaviorState: () => ipcRenderer.invoke('behavior:get-state'),
   getEnvironmentState: () => ipcRenderer.invoke('environment:get-state'),
   getBridgeState: () => ipcRenderer.invoke('bridge:get-state'),

@@ -61,6 +61,25 @@ function formatSeconds(milliseconds) {
   return `${Math.floor(Math.max(0, milliseconds) / 1000)}s`;
 }
 
+function applyActivityState(snapshot) {
+  if (!snapshot) return;
+  document.querySelector('#activity-name').textContent = snapshot.label ?? 'none';
+  document.querySelector('#activity-status').textContent = snapshot.status;
+  document.querySelector('#activity-step').textContent = snapshot.step ?? 'none';
+  document.querySelector('#activity-progress').textContent = `${Math.round(snapshot.progress * 100)}% (${formatSeconds(snapshot.elapsedMs)} / ${formatSeconds(snapshot.totalMs)})`;
+  document.querySelector('#activity-blockers').textContent = [...(snapshot.blockers ?? []), snapshot.pauseReason].filter(Boolean).join(', ') || 'none';
+  document.querySelector('#activity-event').textContent = snapshot.lastEvent ?? 'none';
+}
+
+document.querySelector('.activity-actions').addEventListener('click', async event => {
+  const button = event.target.closest('[data-activity-action]');
+  if (!button) return;
+  const result = await window.debug.activityAction(button.dataset.activityAction);
+  document.querySelector('#activity-result').textContent = result?.accepted === false
+    ? `Not started: ${result.reason}` : `Action: ${button.dataset.activityAction}`;
+  applyActivityState(result?.snapshot ?? (result?.status ? result : null));
+});
+
 function applyBehaviorState(snapshot) {
   if (snapshot?.state) {
     behaviorState.textContent = snapshot.variant ?? snapshot.state;
@@ -219,6 +238,8 @@ document.querySelector('.ecology-actions').addEventListener('click', async (even
 });
 
 window.debug.onBehaviorState(applyBehaviorState);
+window.debug.onActivityState(applyActivityState);
+window.debug.getActivityState().then(applyActivityState);
 window.debug.onEnvironmentState(applyEnvironmentState);
 window.debug.onAnimationState(applyAnimationState);
 window.debug.onBridgeState(applyBridgeState);

@@ -116,6 +116,24 @@
           <dt>Stores content</dt><dd id="relationship-content">no</dd>
         </dl>
       </section>
+      <section aria-labelledby="activity-title">
+        <h2 id="activity-title">Activity lifecycle (test only)</h2>
+        <dl>
+          <dt>Activity</dt><dd id="activity-name">none</dd>
+          <dt>Status</dt><dd id="activity-status">idle</dd>
+          <dt>Step</dt><dd id="activity-step">none</dd>
+          <dt>Progress</dt><dd id="activity-progress">0%</dd>
+          <dt>Pause / blockers</dt><dd id="activity-blockers">none</dd>
+          <dt>Last event</dt><dd id="activity-event">none</dd>
+        </dl>
+        <div class="activity-actions debug-actions">
+          <button type="button" data-activity-action="start-demo">Start observe test</button>
+          <button type="button" data-activity-action="pause">Pause</button>
+          <button type="button" data-activity-action="resume">Resume</button>
+          <button type="button" data-activity-action="cancel">Cancel</button>
+        </div>
+        <p id="activity-result" role="status">Manual tests only; activities do not start automatically.</p>
+      </section>
       <section aria-labelledby="actions-title">
         <h2 id="actions-title">Behavior test</h2>
         <div class="debug-actions">

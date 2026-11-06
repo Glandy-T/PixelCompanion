@@ -19,6 +19,7 @@ const { RELATIONSHIP_STATE_UPDATED, RelationshipManager } = require('./relations
 const { RELATIONSHIP_STATE_FILE, RelationshipStore } = require('./relationship/relationship-store');
 const { APP_SETTINGS_FILE, AppSettingsStore, normalizeAppSettings } = require('./settings/app-settings');
 const { isTrustedSender, protectWindow } = require('./security/window-policy');
+const { ActivityEngine, ACTIVITY_STATE_UPDATED } = require('./activities/activity-engine');
 
 let petWindow;
 let debugWindow;
@@ -39,6 +40,7 @@ let relationshipManager = null;
 let settingsWindow = null;
 let appSettingsStore = null;
 let appSettings = normalizeAppSettings();
+let activityEngine = null;
 
 function trustedRole(event, role) {
   const window = role === 'renderer' ? petWindow : role === 'debug' ? debugWindow : settingsWindow;
@@ -248,6 +250,7 @@ function handlePetInteraction(window, action, options = {}) {
   }
 
   const traits = ecologyEngine?.getSnapshot().personality?.traits ?? {};
+  activityEngine?.interruptForInteraction();
   const reaction = chooseLocalReaction(action, traits);
   ecologyEngine?.recordInteraction(`quick:${action}`);
   relationshipManager?.recordInteraction(action);
@@ -264,6 +267,7 @@ function sendToDebugWindow(channel, payload) {
 }
 
 function sendDebugSnapshot() {
+  sendToDebugWindow('activity:state-changed', activityEngine?.getSnapshot() ?? null);
   sendToDebugWindow('behavior:state-changed', behaviorEngine?.getSnapshot() ?? null);
   sendToDebugWindow('environment:state-changed', sensorManager?.getSnapshot() ?? null);
   sendToDebugWindow('animation:state-changed', latestAnimationSnapshot);
@@ -400,6 +404,13 @@ function createRelationshipRuntime(eventBus) {
   return manager;
 }
 
+function createActivityRuntime(eventBus, engine) {
+  const manager = new ActivityEngine({ eventBus, getBehaviorSnapshot: () => engine.getSnapshot() });
+  eventBus.on(ACTIVITY_STATE_UPDATED, event => sendToDebugWindow('activity:state-changed', event.payload));
+  manager.start();
+  return manager;
+}
+
 function createWindow() {
   const preferences = windowPreferences?.load() ?? { alwaysOnTop: true };
   const position = resolveWindowPosition(preferences, screen.getAllDisplays());
@@ -435,6 +446,7 @@ function createWindow() {
   bridgeBehaviorIntegration = bridgeRuntime.behaviorIntegration;
   ecologyEngine = createEcologyRuntime(environmentEventBus);
   relationshipManager = createRelationshipRuntime(environmentEventBus);
+  activityEngine = createActivityRuntime(environmentEventBus, behaviorEngine);
   window.setMenuBarVisibility(false);
   window.loadFile(path.join(__dirname, 'renderer', 'index.html'), {
     query: { renderer: process.argv.includes('--3d') ? '3d' : '2d' }
@@ -446,11 +458,15 @@ function createWindow() {
   });
   window.on('show', updateTrayMenu);
   window.on('hide', updateTrayMenu);
+  window.on('show', () => activityEngine?.setBlocked('hidden', false));
+  window.on('hide', () => activityEngine?.setBlocked('hidden', true));
   window.on('moved', () => scheduleWindowPreferencesSave(window));
 
   window.on('closed', () => {
     if (petWindow === window) {
       petWindow = null;
+      activityEngine?.stop();
+      activityEngine = null;
       dragOffset = null;
       isMouseIgnored = false;
       sensorManager?.stop();
@@ -494,6 +510,7 @@ ipcMain.on('pet:drag-start', (event, point) => {
   }
 
   const [windowX, windowY] = window.getPosition();
+  activityEngine?.setBlocked('dragging', true);
   dragOffset = {
     window,
     x: point.screenX - windowX,
@@ -518,6 +535,8 @@ ipcMain.on('pet:drag-end', (event) => {
   const window = trustedPetWindow(event);
   if (dragOffset?.window === window) {
     dragOffset = null;
+    activityEngine?.setBlocked('dragging', false);
+    activityEngine?.interruptForInteraction();
   }
 });
 
@@ -580,6 +599,7 @@ ipcMain.handle('bridge:set-sqlite-enabled', (event, enabled) => {
 
 ipcMain.on('ecology:interaction', (event, kind) => {
   if (trustedPetWindow(event) && ['single-click', 'double-click'].includes(kind)) {
+    activityEngine?.interruptForInteraction();
     ecologyEngine?.recordInteraction(kind);
     relationshipManager?.recordInteraction(kind);
   }
@@ -591,6 +611,19 @@ ipcMain.handle('ecology:debug-action', (event, action) => {
   }
 
   return ecologyEngine?.debugAction(action) ?? null;
+});
+
+ipcMain.handle('activity:get-state', (event) => trustedRole(event, 'debug') ? activityEngine?.getSnapshot() ?? null : null);
+ipcMain.handle('activity:debug-action', (event, action) => {
+  if (app.isPackaged || !trustedRole(event, 'debug') || !activityEngine || typeof action !== 'string') return null;
+  switch (action) {
+    case 'start-demo': return activityEngine.begin('observe-demo');
+    case 'pause': activityEngine.setBlocked('manual', true); break;
+    case 'resume': activityEngine.setBlocked('manual', false); break;
+    case 'cancel': activityEngine.cancel(); break;
+    default: return null;
+  }
+  return activityEngine.getSnapshot();
 });
 
 ipcMain.on('behavior:debug-request', (event, state) => {
@@ -614,6 +647,8 @@ ipcMain.on('behavior:debug-request', (event, state) => {
 });
 
 app.whenReady().then(() => {
+  powerMonitor.on('suspend', () => activityEngine?.setBlocked('suspended', true));
+  powerMonitor.on('resume', () => activityEngine?.setBlocked('suspended', false));
   Menu.setApplicationMenu(null);
   windowPreferences = new WindowPreferencesStore({
     filePath: path.join(app.getPath('userData'), WINDOW_PREFERENCES_FILE)

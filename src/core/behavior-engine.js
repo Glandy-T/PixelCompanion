@@ -19,6 +19,7 @@ class BehaviorEngine {
     this.stateTimer = null;
     this.idleTimer = null;
     this.unsubscribe = null;
+    this.unsubscribeRelease = null;
     this.started = false;
     this.sequence = 0;
 
@@ -35,6 +36,7 @@ class BehaviorEngine {
 
     this.started = true;
     this.unsubscribe = this.eventBus.on('behavior:request', (event) => this.request(event));
+    this.unsubscribeRelease = this.eventBus.on('behavior:release', (event) => this.release(event));
     this.scheduleIdleVariant();
   }
 
@@ -42,11 +44,20 @@ class BehaviorEngine {
     this.started = false;
     this.unsubscribe?.();
     this.unsubscribe = null;
+    this.unsubscribeRelease?.();
+    this.unsubscribeRelease = null;
     this.clearTimers();
   }
 
   getSnapshot() {
     return this.stateStore.getSnapshot();
+  }
+
+  release(event) {
+    const current = this.getSnapshot();
+    if (event.source !== current.source || event.payload?.sequence !== current.sequence) return false;
+    this.transition('idle', { source: 'behavior-engine', reason: 'owner-release' });
+    return true;
   }
 
   request(event) {
